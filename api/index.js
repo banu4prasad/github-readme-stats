@@ -12,7 +12,7 @@ import {
   MissingParamError,
   retrieveSecondaryMessage,
 } from "../src/common/error.js";
-import {parseArray, parseBoolean } from "../src/common/ops.js";
+import { parseArray, parseBoolean } from "../src/common/ops.js";
 import { renderError } from "../src/common/render.js";
 import { fetchStats } from "../src/fetchers/stats.js";
 import { isLocaleAvailable } from "../src/translations.js";
@@ -50,7 +50,7 @@ export default async (req, res) => {
     show,
     all_time_contribs,
   } = req.query;
-  
+
   res.setHeader("Content-Type", "image/svg+xml");
 
   const access = guardAccess({
@@ -65,7 +65,7 @@ export default async (req, res) => {
       theme,
     },
   });
-  
+
   if (!access.isPassed) {
     return access.result;
   }
@@ -138,7 +138,9 @@ export default async (req, res) => {
       border_radius,
       border_color,
       number_format,
-      number_precision: number_precision ? parseInt(number_precision, 10) : undefined,
+      number_precision: number_precision
+        ? parseInt(number_precision, 10)
+        : undefined,
       locale: locale ? locale.toLowerCase() : null,
       disable_animations: parseBoolean(disable_animations),
       rank_icon,
@@ -146,11 +148,10 @@ export default async (req, res) => {
     });
 
     return res.send(renderedCard);
-    
   } catch (err) {
     // Set error cache headers BEFORE sending error response
     setErrorCacheHeaders(res);
-    
+
     if (err instanceof Error) {
       return res.send(
         renderError({
@@ -167,7 +168,7 @@ export default async (req, res) => {
         }),
       );
     }
-    
+
     return res.send(
       renderError({
         message: "An unknown error occurred",
