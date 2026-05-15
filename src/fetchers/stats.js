@@ -317,32 +317,36 @@ const fetchStats = async (
   // Feature requires ALL_TIME_CONTRIBS env var to not be "false" (defaults to enabled)
   if (all_time_contribs && isAllTimeContribsEnabled()) {
     let timeoutId = null;
+    let didTimeout = false;
+    const abortController = new AbortController();
+    let allTimePromise;
     try {
       // Add timeout protection to stay within Vercel's execution limits
       const timeoutMs = getAllTimeContribsTimeoutMs();
       const timeoutPromise = new Promise((_, reject) => {
-        timeoutId = setTimeout(
-          () => reject(new Error("All-time contributions fetch timed out")),
-          timeoutMs,
-        );
+        timeoutId = setTimeout(() => {
+          didTimeout = true;
+          abortController.abort();
+          reject(new Error("All-time contributions fetch timed out"));
+        }, timeoutMs);
       });
 
-      const allTimePromise = fetchAllTimeContributions(username);
+      allTimePromise = fetchAllTimeContributions(username, {
+        signal: abortController.signal,
+      });
       const allTimeData = await Promise.race([allTimePromise, timeoutPromise]);
-
-      // Clear timeout to prevent memory leak
-      if (timeoutId !== null) {
-        clearTimeout(timeoutId);
-      }
 
       stats.contributedTo = allTimeData.totalRepositoriesContributedTo;
       logger.log(
         `All-time contributions for ${username}: ${allTimeData.totalRepositoriesContributedTo} repos across ${allTimeData.yearsAnalyzed} years`,
       );
     } catch (err) {
-      // Clear timeout on error as well (if it was set)
-      if (timeoutId !== null) {
-        clearTimeout(timeoutId);
+      if (didTimeout && allTimePromise) {
+        allTimePromise.catch(() => {});
+      }
+
+      if (!abortController.signal.aborted) {
+        abortController.abort();
       }
 
       // Log the error for debugging/monitoring purposes
@@ -352,6 +356,10 @@ const fetchStats = async (
 
       // Graceful fallback to last year's count
       stats.contributedTo = user.repositoriesContributedTo.totalCount;
+    } finally {
+      if (timeoutId !== null) {
+        clearTimeout(timeoutId);
+      }
     }
   } else {
     // Default: last year's contributions

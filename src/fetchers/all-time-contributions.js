@@ -54,13 +54,21 @@ const YEAR_CONTRIBUTIONS_QUERY = `
   }
 `;
 
+const createAbortError = () => {
+  const error = new Error("Request aborted");
+  error.name = "AbortError";
+  return error;
+};
+
 /**
  * Fetcher for contribution years query (compatible with retryer)
  * @param {Object} variables - Query variables
  * @param {string} token - GitHub PAT (provided by retryer)
+ * @param {number} _retries - Retry count (unused)
+ * @param {import("axios").AxiosRequestConfig} [options] - Request options
  * @returns {Promise<import('axios').AxiosResponse>}
  */
-const contributionYearsFetcher = (variables, token) => {
+const contributionYearsFetcher = (variables, token, _retries, options) => {
   return request(
     {
       query: CONTRIBUTION_YEARS_QUERY,
@@ -69,6 +77,7 @@ const contributionYearsFetcher = (variables, token) => {
     {
       Authorization: `bearer ${token}`,
     },
+    options,
   );
 };
 
@@ -76,9 +85,11 @@ const contributionYearsFetcher = (variables, token) => {
  * Fetcher for year contributions query (compatible with retryer)
  * @param {Object} variables - Query variables
  * @param {string} token - GitHub PAT (provided by retryer)
+ * @param {number} _retries - Retry count (unused)
+ * @param {import("axios").AxiosRequestConfig} [options] - Request options
  * @returns {Promise<import('axios').AxiosResponse>}
  */
-const yearContributionsFetcher = (variables, token) => {
+const yearContributionsFetcher = (variables, token, _retries, options) => {
   return request(
     {
       query: YEAR_CONTRIBUTIONS_QUERY,
@@ -87,16 +98,18 @@ const yearContributionsFetcher = (variables, token) => {
     {
       Authorization: `bearer ${token}`,
     },
+    options,
   );
 };
 
 /**
  * Fetches all contribution years for a user
  * @param {string} login - GitHub username
+ * @param {import("axios").AxiosRequestConfig} [options] - Request options
  * @returns {Promise<number[]>} Array of years
  */
-const fetchContributionYears = async (login) => {
-  const res = await retryer(contributionYearsFetcher, { login });
+const fetchContributionYears = async (login, options = {}) => {
+  const res = await retryer(contributionYearsFetcher, { login }, options);
 
   if (res.data.errors) {
     const errorDetails = Array.isArray(res.data.errors)
@@ -131,13 +144,18 @@ const fetchContributionYears = async (login) => {
  * Fetches contributions for a specific year
  * @param {string} login - GitHub username
  * @param {number} year - Year to fetch
+ * @param {import("axios").AxiosRequestConfig} [options] - Request options
  * @returns {Promise<Object>} Contribution data for the year
  */
-const fetchYearContributions = async (login, year) => {
+const fetchYearContributions = async (login, year, options = {}) => {
   const from = `${year}-01-01T00:00:00Z`;
   const to = `${year + 1}-01-01T00:00:00Z`;
 
-  const res = await retryer(yearContributionsFetcher, { login, from, to });
+  const res = await retryer(
+    yearContributionsFetcher,
+    { login, from, to },
+    options,
+  );
 
   if (res.data.errors) {
     throw new CustomError(
@@ -163,11 +181,16 @@ const fetchYearContributions = async (login, year) => {
  * @param {T[]} items - Items to process
  * @param {(item: T) => Promise<R>} fn - Async function to apply to each item
  * @param {number} concurrency - Maximum concurrent operations
+ * @param {import("axios").AxiosRequestConfig} [options] - Request options
  * @returns {Promise<R[]>} Results in order
  */
-const processBatched = async (items, fn, concurrency) => {
+const processBatched = async (items, fn, concurrency, options = {}) => {
   const results = [];
+  const signal = options.signal;
   for (let i = 0; i < items.length; i += concurrency) {
+    if (signal?.aborted) {
+      throw createAbortError();
+    }
     const batch = items.slice(i, i + concurrency);
     const batchResults = await Promise.all(batch.map(fn));
     results.push(...batchResults);
@@ -183,15 +206,20 @@ const processBatched = async (items, fn, concurrency) => {
  * the count may be slightly underreported. This is a GitHub API limitation.
  *
  * @param {string} login - GitHub username
+ * @param {import("axios").AxiosRequestConfig} [options] - Request options
  * @returns {Promise<Object>} All-time contribution stats with unique repository count
  */
-export const fetchAllTimeContributions = async (login) => {
+export const fetchAllTimeContributions = async (login, options = {}) => {
   if (!login) {
     throw new MissingParamError(["login"]);
   }
 
+  if (options.signal?.aborted) {
+    throw createAbortError();
+  }
+
   // Fetch all contribution years (uses retryer with token rotation)
-  const years = await fetchContributionYears(login);
+  const years = await fetchContributionYears(login, options);
 
   if (years.length === 0) {
     return {
@@ -213,8 +241,9 @@ export const fetchAllTimeContributions = async (login) => {
 
   const yearDataResults = await processBatched(
     years,
-    (year) => fetchYearContributions(login, year),
+    (year) => fetchYearContributions(login, year, options),
     concurrency,
+    options,
   );
 
   yearDataResults.forEach((yearData) => {

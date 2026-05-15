@@ -13,18 +13,32 @@ const RETRIES = process.env.NODE_ENV === "test" ? 7 : PATs;
 
 /**
  * @typedef {import("axios").AxiosResponse} AxiosResponse Axios response.
- * @typedef {(variables: any, token: string, retriesForTests?: number) => Promise<AxiosResponse>} FetcherFunction Fetcher function.
+ * @typedef {import("axios").AxiosRequestConfig} AxiosRequestConfig Axios request config.
+ * @typedef {(variables: any, token: string, retriesForTests?: number, options?: AxiosRequestConfig) => Promise<AxiosResponse>} FetcherFunction Fetcher function.
  */
+
+const createAbortError = () => {
+  const error = new Error("Request aborted");
+  error.name = "AbortError";
+  return error;
+};
 
 /**
  * Try to execute the fetcher function until it succeeds or the max number of retries is reached.
  *
  * @param {FetcherFunction} fetcher The fetcher function.
  * @param {any} variables Object with arguments to pass to the fetcher function.
- * @param {number} retries How many times to retry.
+ * @param {number | AxiosRequestConfig} [retriesOrOptions] How many times to retry or request options.
+ * @param {AxiosRequestConfig} [options] Request options when retries are provided.
  * @returns {Promise<any>} The response from the fetcher function.
  */
-const retryer = async (fetcher, variables, retries = 0) => {
+const retryer = async (fetcher, variables, retriesOrOptions = 0, options) => {
+  const isOptionsArg =
+    typeof retriesOrOptions === "object" && retriesOrOptions !== null;
+  let retries = isOptionsArg ? 0 : retriesOrOptions;
+  const resolvedOptions = isOptionsArg ? retriesOrOptions : options;
+  const signal = resolvedOptions?.signal;
+
   if (!RETRIES) {
     throw new CustomError("No GitHub API tokens found", CustomError.NO_TOKENS);
   }
@@ -36,6 +50,10 @@ const retryer = async (fetcher, variables, retries = 0) => {
     );
   }
 
+  if (signal?.aborted) {
+    throw createAbortError();
+  }
+
   try {
     // try to fetch with the first token since RETRIES is 0 index i'm adding +1
     let response = await fetcher(
@@ -44,6 +62,7 @@ const retryer = async (fetcher, variables, retries = 0) => {
       process.env[`PAT_${retries + 1}`],
       // used in tests for faking rate limit
       retries,
+      resolvedOptions,
     );
 
     // react on both type and message-based rate-limit signals.
@@ -59,8 +78,11 @@ const retryer = async (fetcher, variables, retries = 0) => {
     if (isRateLimited) {
       logger.log(`PAT_${retries + 1} Failed`);
       retries++;
+      if (signal?.aborted) {
+        throw createAbortError();
+      }
       // directly return from the function
-      return retryer(fetcher, variables, retries);
+      return retryer(fetcher, variables, retries, resolvedOptions);
     }
 
     // finally return the response
@@ -68,6 +90,10 @@ const retryer = async (fetcher, variables, retries = 0) => {
   } catch (err) {
     /** @type {any} */
     const e = err;
+
+    if (signal?.aborted) {
+      throw createAbortError();
+    }
 
     // network/unexpected error → let caller treat as failure
     if (!e?.response) {
@@ -84,8 +110,11 @@ const retryer = async (fetcher, variables, retries = 0) => {
     if (isBadCredential || isAccountSuspended) {
       logger.log(`PAT_${retries + 1} Failed`);
       retries++;
+      if (signal?.aborted) {
+        throw createAbortError();
+      }
       // directly return from the function
-      return retryer(fetcher, variables, retries);
+      return retryer(fetcher, variables, retries, resolvedOptions);
     }
 
     // HTTP error with a response → return it for caller-side handling
