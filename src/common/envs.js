@@ -12,7 +12,7 @@ const gistWhitelist = process.env.GIST_WHITELIST
  * Whether the all-time contributions feature is enabled.
  * Defaults to true if not explicitly set to "false".
  * Set ALL_TIME_CONTRIBS=false to disable the feature entirely.
- * @returns {boolean}
+ * @returns {boolean} True when all-time contributions are enabled.
  */
 const isAllTimeContribsEnabled = () =>
   process.env.ALL_TIME_CONTRIBS !== "false";
@@ -20,7 +20,7 @@ const isAllTimeContribsEnabled = () =>
 /**
  * Timeout for all-time contributions fetch in milliseconds.
  * Defaults to 9000ms (9 seconds) to stay within Vercel's 10s limit.
- * @returns {number}
+ * @returns {number} Timeout in milliseconds.
  */
 const getAllTimeContribsTimeoutMs = () => {
   const timeout = parseInt(
@@ -34,7 +34,7 @@ const getAllTimeContribsTimeoutMs = () => {
  * Maximum concurrent year fetches for all-time contributions.
  * Limits parallel API requests to avoid rate limiting.
  * Defaults to 3 concurrent requests.
- * @returns {number}
+ * @returns {number} Max concurrent year fetches.
  */
 const getAllTimeContribsConcurrency = () => {
   const concurrency = parseInt(

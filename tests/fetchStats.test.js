@@ -538,18 +538,9 @@ describe("Test fetchStats with all_time_contribs", () => {
     },
   };
 
-  let fetchStats;
-
-  beforeEach(async () => {
-    // Reset modules to pick up fresh env values
-    jest.resetModules();
-
+  beforeEach(() => {
     // Enable ALL_TIME_CONTRIBS feature by default for these tests
     process.env.ALL_TIME_CONTRIBS = "true";
-
-    // Re-import fetchStats after resetting modules
-    const statsModule = await import("../src/fetchers/stats.js");
-    fetchStats = statsModule.fetchStats;
   });
 
   afterEach(() => {
@@ -611,12 +602,7 @@ describe("Test fetchStats with all_time_contribs", () => {
   });
 
   it("should fallback to last year's count when ALL_TIME_CONTRIBS env is false", async () => {
-    // Reset modules and set env BEFORE importing
-    jest.resetModules();
     process.env.ALL_TIME_CONTRIBS = "false";
-
-    const statsModule = await import("../src/fetchers/stats.js");
-    const fetchStatsDisabled = statsModule.fetchStats;
 
     mock.reset();
     mock.onPost("https://api.github.com/graphql").reply((cfg) => {
@@ -627,7 +613,7 @@ describe("Test fetchStats with all_time_contribs", () => {
       return [200, data_repo];
     });
 
-    let stats = await fetchStatsDisabled(
+    let stats = await fetchStats(
       "anuraghazra",
       false, // include_all_commits
       true, // all_time_contribs - requested but env disabled
@@ -662,13 +648,8 @@ describe("Test fetchStats with all_time_contribs", () => {
   });
 
   it("should fallback when all-time contributions fetch times out", async () => {
-    // Reset modules and set short timeout BEFORE importing
-    jest.resetModules();
     process.env.ALL_TIME_CONTRIBS = "true";
     process.env.ALL_TIME_CONTRIBS_TIMEOUT_MS = "1"; // 1ms timeout
-
-    const statsModule = await import("../src/fetchers/stats.js");
-    const fetchStatsWithTimeout = statsModule.fetchStats;
 
     mock.reset();
     mock.onPost("https://api.github.com/graphql").reply((cfg) => {
@@ -687,7 +668,7 @@ describe("Test fetchStats with all_time_contribs", () => {
       return [200, data_repo];
     });
 
-    let stats = await fetchStatsWithTimeout(
+    let stats = await fetchStats(
       "anuraghazra",
       false, // include_all_commits
       true, // all_time_contribs

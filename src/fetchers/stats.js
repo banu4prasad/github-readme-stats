@@ -242,6 +242,37 @@ const fetchStats = async (
     throw new MissingParamError(["username"]);
   }
 
+  if (Array.isArray(all_time_contribs)) {
+    const legacyExcludeRepo = all_time_contribs;
+    const legacyIncludeMerged = exclude_repo;
+    const legacyIncludeDiscussions = include_merged_pull_requests;
+    const legacyIncludeDiscussionsAnswers = include_discussions;
+    const legacyCommitsYear = include_discussions_answers;
+
+    all_time_contribs = false;
+    exclude_repo = legacyExcludeRepo;
+    include_merged_pull_requests =
+      typeof legacyIncludeMerged === "boolean" ? legacyIncludeMerged : false;
+    include_discussions =
+      typeof legacyIncludeDiscussions === "boolean"
+        ? legacyIncludeDiscussions
+        : false;
+    include_discussions_answers =
+      typeof legacyIncludeDiscussionsAnswers === "boolean"
+        ? legacyIncludeDiscussionsAnswers
+        : false;
+    commits_year =
+      typeof legacyCommitsYear === "number" && !Number.isNaN(legacyCommitsYear)
+        ? legacyCommitsYear
+        : undefined;
+  }
+
+  if (typeof exclude_repo === "string") {
+    exclude_repo = [exclude_repo];
+  } else if (!Array.isArray(exclude_repo)) {
+    exclude_repo = [];
+  }
+
   const stats = {
     name: "",
     totalPRs: 0,

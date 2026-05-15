@@ -66,7 +66,7 @@ const createAbortError = () => {
  * @param {string} token - GitHub PAT (provided by retryer)
  * @param {number} _retries - Retry count (unused)
  * @param {import("axios").AxiosRequestConfig} [options] - Request options
- * @returns {Promise<import('axios').AxiosResponse>}
+ * @returns {Promise<import('axios').AxiosResponse>} GraphQL response.
  */
 const contributionYearsFetcher = (variables, token, _retries, options) => {
   return request(
@@ -87,7 +87,7 @@ const contributionYearsFetcher = (variables, token, _retries, options) => {
  * @param {string} token - GitHub PAT (provided by retryer)
  * @param {number} _retries - Retry count (unused)
  * @param {import("axios").AxiosRequestConfig} [options] - Request options
- * @returns {Promise<import('axios').AxiosResponse>}
+ * @returns {Promise<import('axios').AxiosResponse>} GraphQL response.
  */
 const yearContributionsFetcher = (variables, token, _retries, options) => {
   return request(
