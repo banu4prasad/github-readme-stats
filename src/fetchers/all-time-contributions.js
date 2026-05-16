@@ -200,7 +200,8 @@ const processBatched = async (items, fn, concurrency, options = {}) => {
   };
 
   const workers = [];
-  for (let i = 0; i < Math.min(concurrency, items.length); i++) {
+  const poolSize = Math.min(Math.max(1, concurrency), items.length);
+  for (let i = 0; i < poolSize; i++) {
     workers.push(worker());
   }
 

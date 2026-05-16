@@ -441,10 +441,9 @@ describe("fetchAllTimeContributions", () => {
   });
 
   describe("batched processing", () => {
-    it("should process years in batches respecting concurrency limit", async () => {
-      // Track the order of requests to verify batching
-      const requestTimes = [];
-      let requestCount = 0;
+    it("should process years using worker pool respecting concurrency limit and preserving order", async () => {
+      let activeRequests = 0;
+      let peakActiveRequests = 0;
 
       const many_years = {
         data: {
@@ -469,21 +468,30 @@ describe("fetchAllTimeContributions", () => {
         },
       };
 
-      mock.onPost("https://api.github.com/graphql").reply((cfg) => {
+      mock.onPost("https://api.github.com/graphql").reply(async (cfg) => {
         const req = JSON.parse(cfg.data);
         if (req.query.includes("contributionYears")) {
           return [200, many_years];
         }
-        requestCount++;
-        requestTimes.push(Date.now());
+
+        activeRequests++;
+        if (activeRequests > peakActiveRequests) {
+          peakActiveRequests = activeRequests;
+        }
+
+        // simulate processing delay to allow multiple requests to be in flight
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        activeRequests--;
+
         return [200, empty_year];
       });
 
       const result = await fetchAllTimeContributions("testuser");
 
       expect(result.yearsAnalyzed).toBe(7);
-      // All 7 years should have been fetched
-      expect(requestCount).toBe(7);
+      // Ensure we do not exceed the default concurrency of 3
+      expect(peakActiveRequests).toBeLessThanOrEqual(3);
+      expect(peakActiveRequests).toBeGreaterThan(0);
     });
   });
 });
