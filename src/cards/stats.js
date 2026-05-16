@@ -405,7 +405,9 @@ const renderStatsCard = (stats, options = {}) => {
 
   STATS.contribs = {
     icon: icons.contribs,
-    label: all_time_contribs ? i18n.t("statcard.contribs-alltime") : i18n.t("statcard.contribs"),
+    label: all_time_contribs
+      ? i18n.t("statcard.contribs-alltime")
+      : i18n.t("statcard.contribs"),
     value: contributedTo,
     id: "contribs",
   };
@@ -413,9 +415,11 @@ const renderStatsCard = (stats, options = {}) => {
   // @ts-ignore
   const isLongLocale = locale ? LONG_LOCALES.includes(locale) : false;
 
+  const hiddenStats = new Set(hide);
+
   // filter out hidden stats defined by user & create the text nodes
   const statItems = Object.keys(STATS)
-    .filter((key) => !hide.includes(key))
+    .filter((key) => !hiddenStats.has(key))
     .map((key, index) => {
       // @ts-ignore
       const stats = STATS[key];
@@ -567,7 +571,7 @@ const renderStatsCard = (stats, options = {}) => {
 
   // Accessibility Labels
   const labels = Object.keys(STATS)
-    .filter((key) => !hide.includes(key))
+    .filter((key) => !hiddenStats.has(key))
     .map((key) => {
       // @ts-ignore
       const stats = STATS[key];
