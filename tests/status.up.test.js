@@ -22,6 +22,7 @@ const faker = (query) => {
   const res = {
     setHeader: jest.fn(),
     send: jest.fn(),
+    json: jest.fn(),
   };
 
   return { req, res };
@@ -221,5 +222,24 @@ describe("Test /api/status/up", () => {
       ["Content-Type", "application/json"],
       ["Cache-Control", "no-store"],
     ]);
+  });
+
+  it("should return JSON error from the outer catch block", async () => {
+    mock.onPost("https://api.github.com/graphql").replyOnce(200, successData);
+
+    // Simulate an error in the outer scope by throwing in `res.send`.
+    const req = { query: {} };
+    const res = {
+      setHeader: jest.fn(),
+      send: jest.fn(() => {
+        throw new Error("Simulated outer scope error");
+      }),
+      json: jest.fn(),
+    };
+
+    await up(req, res);
+
+    expect(res.setHeader).toHaveBeenCalledWith("Cache-Control", "no-store");
+    expect(res.json).toHaveBeenCalledWith({ error: "Something went wrong: Simulated outer scope error" });
   });
 });

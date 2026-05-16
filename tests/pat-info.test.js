@@ -34,6 +34,7 @@ const faker = (query) => {
   const res = {
     setHeader: jest.fn(),
     send: jest.fn(),
+    json: jest.fn(),
   };
 
   return { req, res };
@@ -234,8 +235,8 @@ describe("Test /api/status/pat-info", () => {
       "Content-Type",
       "application/json",
     );
-    expect(res.send).toHaveBeenCalledWith(
-      "Something went wrong: Network Error",
+    expect(res.json).toHaveBeenCalledWith(
+      { error: "Something went wrong: Network Error" },
     );
   });
 

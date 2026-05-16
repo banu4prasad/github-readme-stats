@@ -10,7 +10,6 @@
 import { request } from "../../src/common/http.js";
 import { logger } from "../../src/common/log.js";
 import { dateDiff } from "../../src/common/ops.js";
-import { encodeHTML } from "../../src/common/html.js";
 
 export const RATE_LIMIT_SECONDS = 60 * 5; // 1 request per 5 minutes
 
@@ -155,6 +154,6 @@ export default async (_, res) => {
     // Throw error if something went wrong.
     logger.error(err);
     res.setHeader("Cache-Control", "no-store");
-    res.send(encodeHTML("Something went wrong: " + err.message));
+    res.json({ error: "Something went wrong: " + err.message });
   }
 };
