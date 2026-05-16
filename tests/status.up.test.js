@@ -22,6 +22,7 @@ const faker = (query) => {
   const res = {
     setHeader: jest.fn(),
     send: jest.fn(),
+    json: jest.fn(),
   };
 
   return { req, res };
