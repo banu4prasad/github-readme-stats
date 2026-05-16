@@ -114,7 +114,10 @@ const fetchTopLanguages = async (
   repoNodes = repoNodes
     .filter((node) => node.languages.edges.length > 0)
     // flatten the list of language nodes
-    .reduce((acc, curr) => curr.languages.edges.concat(acc), [])
+    .reduce((acc, curr) => {
+      acc.push(...curr.languages.edges);
+      return acc;
+    }, [])
     .reduce((acc, prev) => {
       // get the size of the language (bytes)
       let langSize = prev.size;
