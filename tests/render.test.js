@@ -23,5 +23,18 @@ describe("Test render.js", () => {
     expect(
       queryByTestId(document.body, "message")?.children[1],
     ).toHaveTextContent(/Secondary Message/gim);
+
+    // XSS Escaping
+    document.body.innerHTML = renderError({
+      message: "Something went wrong",
+      secondaryMessage: "<script>alert(1)</script>",
+    });
+    expect(
+      queryByTestId(document.body, "message")?.children[1],
+    ).toHaveTextContent(/<script>alert\(1\)<\/script>/gim);
+    expect(document.body.innerHTML).toContain(
+      "&lt;script&gt;alert(1)&lt;/script&gt;",
+    );
+    expect(document.body.innerHTML).not.toContain("<script>alert(1)</script>");
   });
 });
