@@ -405,7 +405,9 @@ const renderStatsCard = (stats, options = {}) => {
 
   STATS.contribs = {
     icon: icons.contribs,
-    label: all_time_contribs ? i18n.t("statcard.contribs-alltime") : i18n.t("statcard.contribs"),
+    label: all_time_contribs
+      ? i18n.t("statcard.contribs-alltime")
+      : i18n.t("statcard.contribs"),
     value: contributedTo,
     id: "contribs",
   };

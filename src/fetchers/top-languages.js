@@ -145,10 +145,10 @@ const fetchTopLanguages = async (
     }, {});
 
   Object.keys(repoNodes).forEach((name) => {
+    const node = repoNodes[name];
     // comparison index calculation
-    repoNodes[name].size =
-      Math.pow(repoNodes[name].size, size_weight) *
-      Math.pow(repoNodes[name].count, count_weight);
+    node.size =
+      Math.pow(node.size, size_weight) * Math.pow(node.count, count_weight);
   });
 
   const topLangs = Object.keys(repoNodes)

@@ -444,7 +444,9 @@ describe("Test /api/", () => {
     // Should use ALL_TIME_STATS_CARD cache settings (longer cache)
     expect(res.setHeader).toHaveBeenCalledWith(
       "Cache-Control",
-      expect.stringContaining(`max-age=${CACHE_TTL.ALL_TIME_STATS_CARD.DEFAULT}`),
+      expect.stringContaining(
+        `max-age=${CACHE_TTL.ALL_TIME_STATS_CARD.DEFAULT}`,
+      ),
     );
   });
 
