@@ -13,6 +13,7 @@ import {
   retrieveSecondaryMessage,
 } from "../src/common/error.js";
 import { parseBoolean } from "../src/common/ops.js";
+import { getQueryParams } from "../src/common/query.js";
 import { renderError } from "../src/common/render.js";
 import { fetchRepo } from "../src/fetchers/repo.js";
 import { isLocaleAvailable } from "../src/translations.js";
@@ -34,7 +35,7 @@ export default async (req, res) => {
     border_radius,
     border_color,
     description_lines_count,
-  } = req.query;
+  } = getQueryParams(req);
 
   res.setHeader("Content-Type", "image/svg+xml");
 

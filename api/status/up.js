@@ -11,6 +11,7 @@ import { request } from "../../src/common/http.js";
 import retryer from "../../src/common/retryer.js";
 import { logger } from "../../src/common/log.js";
 import { encodeHTML } from "../../src/common/html.js";
+import { getQueryParams } from "../../src/common/query.js";
 
 export const RATE_LIMIT_SECONDS = 60 * 5; // 1 request per 5 minutes
 
@@ -80,7 +81,7 @@ const shieldsUptimeBadge = (up) => {
  * @returns {Promise<void>} Nothing.
  */
 export default async (req, res) => {
-  let { type } = req.query;
+  let { type } = getQueryParams(req);
   type = type ? type.toLowerCase() : "boolean";
 
   res.setHeader("Content-Type", "application/json");

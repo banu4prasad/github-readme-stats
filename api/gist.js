@@ -16,6 +16,7 @@ import {
   retrieveSecondaryMessage,
 } from "../src/common/error.js";
 import { parseBoolean } from "../src/common/ops.js";
+import { getQueryParams } from "../src/common/query.js";
 
 // @ts-ignore
 export default async (req, res) => {
@@ -32,7 +33,7 @@ export default async (req, res) => {
     border_color,
     show_owner,
     hide_border,
-  } = req.query;
+  } = getQueryParams(req);
 
   res.setHeader("Content-Type", "image/svg+xml");
 
