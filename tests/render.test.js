@@ -23,5 +23,20 @@ describe("Test render.js", () => {
     expect(
       queryByTestId(document.body, "message")?.children[1],
     ).toHaveTextContent(/Secondary Message/gim);
+
+    // XSS Escaping
+    const svgString = renderError({
+      message: "Something went wrong",
+      secondaryMessage: "<script>alert(1)</script>",
+    });
+
+    // Assert on the raw string output to avoid JSDOM serialization variations
+    expect(svgString).toContain("&#60;script&#62;alert(1)&#60;/script&#62;");
+    expect(svgString).not.toContain("<script>alert(1)</script>");
+
+    document.body.innerHTML = svgString;
+    expect(
+      queryByTestId(document.body, "message")?.children[1],
+    ).toHaveTextContent(/<script>alert\(1\)<\/script>/gim);
   });
 });
