@@ -185,16 +185,26 @@ const fetchYearContributions = async (login, year, options = {}) => {
  * @returns {Promise<R[]>} Results in order
  */
 const processBatched = async (items, fn, concurrency, options = {}) => {
-  const results = [];
+  const results = new Array(items.length);
   const signal = options.signal;
-  for (let i = 0; i < items.length; i += concurrency) {
-    if (signal?.aborted) {
-      throw createAbortError();
+  let currentIndex = 0;
+
+  const worker = async () => {
+    while (currentIndex < items.length) {
+      if (signal?.aborted) {
+        throw createAbortError();
+      }
+      const i = currentIndex++;
+      results[i] = await fn(items[i]);
     }
-    const batch = items.slice(i, i + concurrency);
-    const batchResults = await Promise.all(batch.map(fn));
-    results.push(...batchResults);
+  };
+
+  const workers = [];
+  for (let i = 0; i < Math.min(concurrency, items.length); i++) {
+    workers.push(worker());
   }
+
+  await Promise.all(workers);
   return results;
 };
 
