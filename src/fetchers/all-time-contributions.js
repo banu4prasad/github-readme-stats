@@ -175,7 +175,7 @@ const fetchYearContributions = async (login, year, options = {}) => {
 };
 
 /**
- * Process items in batches with concurrency limit to avoid rate limiting.
+ * Process items using a worker pool with a concurrency limit to maximize throughput and avoid rate limiting.
  * @template T
  * @template R
  * @param {T[]} items - Items to process
@@ -185,16 +185,33 @@ const fetchYearContributions = async (login, year, options = {}) => {
  * @returns {Promise<R[]>} Results in order
  */
 const processBatched = async (items, fn, concurrency, options = {}) => {
-  const results = [];
+  const results = new Array(items.length);
   const signal = options.signal;
-  for (let i = 0; i < items.length; i += concurrency) {
-    if (signal?.aborted) {
-      throw createAbortError();
+  let currentIndex = 0;
+  let hasError = false;
+
+  const worker = async () => {
+    while (currentIndex < items.length && !hasError) {
+      if (signal?.aborted) {
+        throw createAbortError();
+      }
+      const i = currentIndex++;
+      try {
+        results[i] = await fn(items[i]);
+      } catch (err) {
+        hasError = true;
+        throw err;
+      }
     }
-    const batch = items.slice(i, i + concurrency);
-    const batchResults = await Promise.all(batch.map(fn));
-    results.push(...batchResults);
+  };
+
+  const workers = [];
+  const poolSize = Math.min(Math.max(1, concurrency), items.length);
+  for (let i = 0; i < poolSize; i++) {
+    workers.push(worker());
   }
+
+  await Promise.all(workers);
   return results;
 };
 

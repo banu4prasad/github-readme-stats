@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "@jest/globals";
+import { afterEach, beforeEach, afterAll, describe, expect, it } from "@jest/globals";
 import "@testing-library/jest-dom";
 import axios from "axios";
 import MockAdapter from "axios-mock-adapter";
@@ -441,9 +441,20 @@ describe("fetchAllTimeContributions", () => {
   });
 
   describe("batched processing", () => {
-    it("should process years in batches respecting concurrency limit", async () => {
-      // Track the order of requests to verify batching
-      const requestTimes = [];
+    const ORIGINAL_ENV = process.env;
+
+    beforeEach(() => {
+      process.env = { ...ORIGINAL_ENV };
+    });
+
+    afterAll(() => {
+      process.env = ORIGINAL_ENV;
+    });
+
+    it("should process years using worker pool respecting concurrency limit", async () => {
+      process.env.ALL_TIME_CONTRIBS_CONCURRENCY = "3";
+      let activeRequests = 0;
+      let peakActiveRequests = 0;
       let requestCount = 0;
 
       const many_years = {
@@ -469,21 +480,33 @@ describe("fetchAllTimeContributions", () => {
         },
       };
 
-      mock.onPost("https://api.github.com/graphql").reply((cfg) => {
+      mock.onPost("https://api.github.com/graphql").reply(async (cfg) => {
         const req = JSON.parse(cfg.data);
         if (req.query.includes("contributionYears")) {
           return [200, many_years];
         }
+
         requestCount++;
-        requestTimes.push(Date.now());
+        activeRequests++;
+        if (activeRequests > peakActiveRequests) {
+          peakActiveRequests = activeRequests;
+        }
+
+        // simulate processing delay to allow multiple requests to be in flight
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        activeRequests--;
+
         return [200, empty_year];
       });
 
       const result = await fetchAllTimeContributions("testuser");
 
       expect(result.yearsAnalyzed).toBe(7);
-      // All 7 years should have been fetched
       expect(requestCount).toBe(7);
+      // Ensure we do not exceed the configured concurrency of 3
+      expect(peakActiveRequests).toBeLessThanOrEqual(3);
+      // Ensure concurrency is actually exercised
+      expect(peakActiveRequests).toBeGreaterThan(1);
     });
   });
 });
