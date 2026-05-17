@@ -130,6 +130,22 @@ describe("WakaTime fetcher", () => {
       "Could not resolve to a User with the login of 'noone'",
     );
   });
+
+  it("should throw fallback error if wakatime api returns an error with 200 status", async () => {
+    mock
+      .onGet(
+        `https://wakatime.com/api/v1/users/anuraghazra/stats?is_including_today=true`,
+      )
+      .reply(() => {
+        const err = new Error("Something went wrong");
+        err.response = { status: 200 };
+        return Promise.reject(err);
+      });
+
+    await expect(fetchWakatimeStats({ username: "anuraghazra" })).rejects.toThrow(
+      "Something went wrong",
+    );
+  });
 });
 
 export { wakaTimeData };
