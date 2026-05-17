@@ -455,6 +455,7 @@ describe("fetchAllTimeContributions", () => {
       process.env.ALL_TIME_CONTRIBS_CONCURRENCY = "3";
       let activeRequests = 0;
       let peakActiveRequests = 0;
+      let requestCount = 0;
 
       const many_years = {
         data: {
@@ -485,6 +486,7 @@ describe("fetchAllTimeContributions", () => {
           return [200, many_years];
         }
 
+        requestCount++;
         activeRequests++;
         if (activeRequests > peakActiveRequests) {
           peakActiveRequests = activeRequests;
@@ -500,9 +502,11 @@ describe("fetchAllTimeContributions", () => {
       const result = await fetchAllTimeContributions("testuser");
 
       expect(result.yearsAnalyzed).toBe(7);
+      expect(requestCount).toBe(7);
       // Ensure we do not exceed the configured concurrency of 3
       expect(peakActiveRequests).toBeLessThanOrEqual(3);
-      expect(peakActiveRequests).toBeGreaterThan(0);
+      // Ensure concurrency is actually exercised
+      expect(peakActiveRequests).toBeGreaterThan(1);
     });
   });
 });
