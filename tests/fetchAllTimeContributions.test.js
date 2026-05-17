@@ -441,7 +441,18 @@ describe("fetchAllTimeContributions", () => {
   });
 
   describe("batched processing", () => {
-    it("should process years using worker pool respecting concurrency limit and preserving order", async () => {
+    const ORIGINAL_ENV = process.env;
+
+    beforeEach(() => {
+      process.env = { ...ORIGINAL_ENV };
+    });
+
+    afterAll(() => {
+      process.env = ORIGINAL_ENV;
+    });
+
+    it("should process years using worker pool respecting concurrency limit", async () => {
+      process.env.ALL_TIME_CONTRIBS_CONCURRENCY = "3";
       let activeRequests = 0;
       let peakActiveRequests = 0;
 
