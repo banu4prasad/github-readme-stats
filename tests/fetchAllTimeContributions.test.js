@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "@jest/globals";
+import { afterEach, beforeEach, afterAll, describe, expect, it } from "@jest/globals";
 import "@testing-library/jest-dom";
 import axios from "axios";
 import MockAdapter from "axios-mock-adapter";
@@ -500,7 +500,7 @@ describe("fetchAllTimeContributions", () => {
       const result = await fetchAllTimeContributions("testuser");
 
       expect(result.yearsAnalyzed).toBe(7);
-      // Ensure we do not exceed the default concurrency of 3
+      // Ensure we do not exceed the configured concurrency of 3
       expect(peakActiveRequests).toBeLessThanOrEqual(3);
       expect(peakActiveRequests).toBeGreaterThan(0);
     });
