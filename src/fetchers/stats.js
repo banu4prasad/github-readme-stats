@@ -44,15 +44,20 @@ const GRAPHQL_REPOS_QUERY = `
 `;
 
 const GRAPHQL_STATS_QUERY = `
-  query userInfo($login: String!, $after: String, $includeMergedPullRequests: Boolean!, $includeDiscussions: Boolean!, $includeDiscussionsAnswers: Boolean!, $startTime: DateTime = null) {
+  query userInfo(
+    $login: String!
+    $after: String
+    $includeMergedPullRequests: Boolean!
+    $includeDiscussions: Boolean!
+    $includeDiscussionsAnswers: Boolean!
+    $startTime: DateTime = null
+    $reviewSearchQuery: String!
+  ) {
     user(login: $login) {
       name
       login
       commits: contributionsCollection (from: $startTime) {
         totalCommitContributions,
-      }
-      reviews: contributionsCollection {
-        totalPullRequestReviewContributions
       }
       repositoriesContributedTo(first: 1, contributionTypes: [COMMIT, ISSUE, PULL_REQUEST, REPOSITORY]) {
         totalCount
@@ -80,8 +85,18 @@ const GRAPHQL_STATS_QUERY = `
       }
       ${GRAPHQL_REPOS_FIELD}
     }
+    reviewedPullRequests: search(query: $reviewSearchQuery, type: ISSUE, first: 1) {
+      issueCount
+    }
   }
 `;
+
+const REVIEWED_PULL_REQUESTS_SEARCH_FALLBACK = "is:pr reviewed-by:octocat";
+
+const getReviewedPullRequestsSearchQuery = (username) =>
+  githubUsernameRegex.test(username)
+    ? `is:pr reviewed-by:${username}`
+    : REVIEWED_PULL_REQUESTS_SEARCH_FALLBACK;
 
 /**
  * Stats fetcher object.
@@ -135,6 +150,7 @@ const statsFetcher = async ({
       includeDiscussions,
       includeDiscussionsAnswers,
       startTime,
+      reviewSearchQuery: getReviewedPullRequestsSearchQuery(username),
     };
     let res = await retryer(fetcher, variables);
     if (res.data.errors) {
@@ -334,7 +350,7 @@ const fetchStats = async (
       (user.mergedPullRequests.totalCount / user.pullRequests.totalCount) *
         100 || 0;
   }
-  stats.totalReviews = user.reviews.totalPullRequestReviewContributions;
+  stats.totalReviews = res.data.data.reviewedPullRequests.issueCount;
   stats.totalIssues = user.openIssues.totalCount + user.closedIssues.totalCount;
   if (include_discussions) {
     stats.totalDiscussionsStarted = user.repositoryDiscussions.totalCount;

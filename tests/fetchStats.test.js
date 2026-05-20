@@ -37,11 +37,18 @@ const data_stats = {
         },
       },
     },
+    reviewedPullRequests: {
+      issueCount: 50,
+    },
   },
 };
 
 const data_year2003 = JSON.parse(JSON.stringify(data_stats));
 data_year2003.data.user.commits.totalCommitContributions = 428;
+
+const data_all_time_reviews = JSON.parse(JSON.stringify(data_stats));
+data_all_time_reviews.data.user.reviews.totalPullRequestReviewContributions = 2;
+data_all_time_reviews.data.reviewedPullRequests.issueCount = 22;
 
 const data_without_pull_requests = {
   data: {
@@ -49,6 +56,9 @@ const data_without_pull_requests = {
       ...data_stats.data.user,
       pullRequests: { totalCount: 0 },
       mergedPullRequests: { totalCount: 0 },
+    },
+    reviewedPullRequests: {
+      issueCount: 50,
     },
   },
 };
@@ -154,6 +164,23 @@ describe("Test fetchStats", () => {
       totalDiscussionsAnswered: 0,
       rank,
     });
+  });
+
+  it("should count reviewed pull requests across all time", async () => {
+    mock.reset();
+    let graphQLRequest;
+    mock.onPost("https://api.github.com/graphql").reply((cfg) => {
+      graphQLRequest = JSON.parse(cfg.data);
+      return [200, data_all_time_reviews];
+    });
+
+    const stats = await fetchStats("anuraghazra");
+
+    expect(stats.totalReviews).toBe(22);
+    expect(graphQLRequest.query).toContain("reviewedPullRequests: search");
+    expect(graphQLRequest.variables.reviewSearchQuery).toBe(
+      "is:pr reviewed-by:anuraghazra",
+    );
   });
 
   it("should stop fetching when there are repos with zero stars", async () => {

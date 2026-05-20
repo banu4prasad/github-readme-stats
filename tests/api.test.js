@@ -74,6 +74,9 @@ const data_stats = {
         },
       },
     },
+    reviewedPullRequests: {
+      issueCount: stats.totalReviews,
+    },
   },
 };
 
