@@ -143,4 +143,20 @@ describe("Test /api/wakatime", () => {
         `stale-while-revalidate=${DURATIONS.ONE_DAY}`,
     );
   });
+
+  it("should reject attacker-controlled api_domain without requesting it", async () => {
+    const req = {
+      query: {
+        username: "testuser",
+        api_domain: "attacker.ngrok-free.app",
+      },
+    };
+    const res = { setHeader: jest.fn(), send: jest.fn() };
+
+    await wakatime(req, res);
+
+    expect(mock.history.get).toHaveLength(0);
+    expect(res.setHeader).toHaveBeenCalledWith("Content-Type", "image/svg+xml");
+    expect(res.send.mock.calls[0][0]).toContain("Invalid WakaTime API domain");
+  });
 });

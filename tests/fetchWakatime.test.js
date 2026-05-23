@@ -115,6 +115,45 @@ describe("WakaTime fetcher", () => {
     expect(repo).toStrictEqual(wakaTimeData.data);
   });
 
+  it("should fetch correct WakaTime data when api_domain is wakatime.com", async () => {
+    const username = "anuraghazra";
+    mock
+      .onGet(
+        `https://wakatime.com/api/v1/users/${username}/stats?is_including_today=true`,
+      )
+      .reply(200, wakaTimeData);
+
+    const repo = await fetchWakatimeStats({
+      username,
+      api_domain: "wakatime.com",
+    });
+
+    expect(repo).toStrictEqual(wakaTimeData.data);
+  });
+
+  it.each([
+    "attacker.ngrok-free.app",
+    "localhost",
+    "127.0.0.1",
+    "10.0.0.1",
+    "172.16.0.1",
+    "192.168.1.1",
+    "169.254.169.254",
+    "[::1]",
+    "https://wakatime.com",
+    "wakatime.com/api",
+    "wakatime.com:443",
+    "user@wakatime.com",
+    "wakatime.com.",
+    "waka_time.com",
+  ])("should reject unsafe api_domain %s", async (api_domain) => {
+    await expect(
+      fetchWakatimeStats({ username: "anuraghazra", api_domain }),
+    ).rejects.toThrow("Invalid WakaTime API domain");
+
+    expect(mock.history.get).toHaveLength(0);
+  });
+
   it("should throw error if username param missing", async () => {
     mock.onGet(/\/https:\/\/wakatime\.com\/api/).reply(404, wakaTimeData);
 
@@ -142,9 +181,9 @@ describe("WakaTime fetcher", () => {
         return Promise.reject(err);
       });
 
-    await expect(fetchWakatimeStats({ username: "anuraghazra" })).rejects.toThrow(
-      "Something went wrong",
-    );
+    await expect(
+      fetchWakatimeStats({ username: "anuraghazra" }),
+    ).rejects.toThrow("Something went wrong");
   });
 });
 
