@@ -2,18 +2,22 @@
  * @file Tests for the status/up cloud function.
  */
 
-import { afterEach, describe, expect, it, jest } from "@jest/globals";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  jest,
+} from "@jest/globals";
 import axios from "axios";
 import MockAdapter from "axios-mock-adapter";
 import up, { RATE_LIMIT_SECONDS } from "../api/status/up.js";
 
-const mock = new MockAdapter(axios);
+const GRAPHQL_ENDPOINT = "https://api.github.com/graphql";
 
-const successData = {
-  rateLimit: {
-    remaining: 4986,
-  },
-};
+const mock = new MockAdapter(axios);
+const originalEnv = process.env;
 
 const faker = (query) => {
   const req = {
@@ -28,68 +32,32 @@ const faker = (query) => {
   return { req, res };
 };
 
-const rate_limit_error = {
-  errors: [
-    {
-      type: "RATE_LIMITED",
-    },
-  ],
-};
-
-const bad_credentials_error = {
-  message: "Bad credentials",
-};
-
-const shields_up = {
+const shieldsUp = {
   schemaVersion: 1,
   label: "Public Instance",
   isError: true,
   message: "up",
   color: "brightgreen",
 };
-const shields_down = {
-  schemaVersion: 1,
-  label: "Public Instance",
-  isError: true,
-  message: "down",
-  color: "red",
-};
+
+beforeEach(() => {
+  process.env = {
+    ...originalEnv,
+    PAT_1: "fake-status-token-1",
+    PAT_2: "fake-status-token-2",
+  };
+});
 
 afterEach(() => {
   mock.reset();
+  process.env = originalEnv;
 });
 
 describe("Test /api/status/up", () => {
-  it("should return `true` if request was successful", async () => {
-    mock.onPost("https://api.github.com/graphql").replyOnce(200, successData);
+  it("should return generic public JSON status by default", async () => {
+    mock.onPost(GRAPHQL_ENDPOINT).reply(500);
 
-    const { req, res } = faker({}, {});
-    await up(req, res);
-
-    expect(res.setHeader).toHaveBeenCalledWith(
-      "Content-Type",
-      "application/json",
-    );
-    expect(res.send).toHaveBeenCalledWith(true);
-  });
-
-  it("should return `false` if all PATs are rate limited", async () => {
-    mock.onPost("https://api.github.com/graphql").reply(200, rate_limit_error);
-
-    const { req, res } = faker({}, {});
-    await up(req, res);
-
-    expect(res.setHeader).toHaveBeenCalledWith(
-      "Content-Type",
-      "application/json",
-    );
-    expect(res.send).toHaveBeenCalledWith(false);
-  });
-
-  it("should return JSON `true` if request was successful and type='json'", async () => {
-    mock.onPost("https://api.github.com/graphql").replyOnce(200, successData);
-
-    const { req, res } = faker({ type: "json" }, {});
+    const { req, res } = faker({});
     await up(req, res);
 
     expect(res.setHeader).toHaveBeenCalledWith(
@@ -97,55 +65,41 @@ describe("Test /api/status/up", () => {
       "application/json",
     );
     expect(res.send).toHaveBeenCalledWith({ up: true });
+    expect(mock.history.post).toHaveLength(0);
   });
 
-  it("should return JSON `false` if all PATs are rate limited and type='json'", async () => {
-    mock.onPost("https://api.github.com/graphql").reply(200, rate_limit_error);
+  it("should return generic public JSON status for type='json'", async () => {
+    mock.onPost(GRAPHQL_ENDPOINT).reply(500);
 
-    const { req, res } = faker({ type: "json" }, {});
+    const { req, res } = faker({ type: "json" });
     await up(req, res);
 
     expect(res.setHeader).toHaveBeenCalledWith(
       "Content-Type",
       "application/json",
     );
-    expect(res.send).toHaveBeenCalledWith({ up: false });
+    expect(res.send).toHaveBeenCalledWith({ up: true });
+    expect(mock.history.post).toHaveLength(0);
   });
 
-  it("should return UP shields.io config if request was successful and type='shields'", async () => {
-    mock.onPost("https://api.github.com/graphql").replyOnce(200, successData);
+  it("should keep shields.io output generic and avoid GitHub requests", async () => {
+    mock.onPost(GRAPHQL_ENDPOINT).reply(500);
 
-    const { req, res } = faker({ type: "shields" }, {});
+    const { req, res } = faker({ type: "shields" });
     await up(req, res);
 
     expect(res.setHeader).toHaveBeenCalledWith(
       "Content-Type",
       "application/json",
     );
-    expect(res.send).toHaveBeenCalledWith(shields_up);
+    expect(res.send).toHaveBeenCalledWith(shieldsUp);
+    expect(mock.history.post).toHaveLength(0);
   });
 
-  it("should return DOWN shields.io config if all PATs are rate limited and type='shields'", async () => {
-    mock.onPost("https://api.github.com/graphql").reply(200, rate_limit_error);
+  it("should keep legacy boolean output generic and avoid GitHub requests", async () => {
+    mock.onPost(GRAPHQL_ENDPOINT).reply(500);
 
-    const { req, res } = faker({ type: "shields" }, {});
-    await up(req, res);
-
-    expect(res.setHeader).toHaveBeenCalledWith(
-      "Content-Type",
-      "application/json",
-    );
-    expect(res.send).toHaveBeenCalledWith(shields_down);
-  });
-
-  it("should return `true` if the first PAT is rate limited but the second PATs works", async () => {
-    mock
-      .onPost("https://api.github.com/graphql")
-      .replyOnce(200, rate_limit_error)
-      .onPost("https://api.github.com/graphql")
-      .replyOnce(200, successData);
-
-    const { req, res } = faker({}, {});
+    const { req, res } = faker({ type: "boolean" });
     await up(req, res);
 
     expect(res.setHeader).toHaveBeenCalledWith(
@@ -153,81 +107,27 @@ describe("Test /api/status/up", () => {
       "application/json",
     );
     expect(res.send).toHaveBeenCalledWith(true);
+    expect(mock.history.post).toHaveLength(0);
   });
 
-  it("should return `true` if the first PAT has 'Bad credentials' but the second PAT works", async () => {
-    mock
-      .onPost("https://api.github.com/graphql")
-      .replyOnce(404, bad_credentials_error)
-      .onPost("https://api.github.com/graphql")
-      .replyOnce(200, successData);
+  it("should ignore unknown query parameters", async () => {
+    mock.onPost(GRAPHQL_ENDPOINT).reply(500);
 
-    const { req, res } = faker({}, {});
+    const { req, res } = faker({
+      cache_buster: "different-every-time",
+      unknown: "value",
+    });
     await up(req, res);
 
-    expect(res.setHeader).toHaveBeenCalledWith(
-      "Content-Type",
-      "application/json",
-    );
-    expect(res.send).toHaveBeenCalledWith(true);
-  });
-
-  it("should return `false` if all pats have 'Bad credentials'", async () => {
-    mock
-      .onPost("https://api.github.com/graphql")
-      .reply(404, bad_credentials_error);
-
-    const { req, res } = faker({}, {});
-    await up(req, res);
-
-    expect(res.setHeader).toHaveBeenCalledWith(
-      "Content-Type",
-      "application/json",
-    );
-    expect(res.send).toHaveBeenCalledWith(false);
-  });
-
-  it("should throw an error if the request fails", async () => {
-    mock.onPost("https://api.github.com/graphql").networkError();
-
-    const { req, res } = faker({}, {});
-    await up(req, res);
-
-    expect(res.setHeader).toHaveBeenCalledWith(
-      "Content-Type",
-      "application/json",
-    );
-    expect(res.send).toHaveBeenCalledWith(false);
-  });
-
-  it("should have proper cache when no error is thrown", async () => {
-    mock.onPost("https://api.github.com/graphql").replyOnce(200, successData);
-
-    const { req, res } = faker({}, {});
-    await up(req, res);
-
+    expect(res.send).toHaveBeenCalledWith({ up: true });
     expect(res.setHeader.mock.calls).toEqual([
       ["Content-Type", "application/json"],
       ["Cache-Control", `max-age=0, s-maxage=${RATE_LIMIT_SECONDS}`],
     ]);
+    expect(mock.history.post).toHaveLength(0);
   });
 
-  it("should have proper cache when error is thrown", async () => {
-    mock.onPost("https://api.github.com/graphql").networkError();
-
-    const { req, res } = faker({}, {});
-    await up(req, res);
-
-    expect(res.setHeader.mock.calls).toEqual([
-      ["Content-Type", "application/json"],
-      ["Cache-Control", "no-store"],
-    ]);
-  });
-
-  it("should return JSON error from the outer catch block", async () => {
-    mock.onPost("https://api.github.com/graphql").replyOnce(200, successData);
-
-    // Simulate an error in the outer scope by throwing in `res.send`.
+  it("should return generic JSON status from the outer catch block", async () => {
     const req = { query: {} };
     const res = {
       setHeader: jest.fn(),
@@ -240,6 +140,7 @@ describe("Test /api/status/up", () => {
     await up(req, res);
 
     expect(res.setHeader).toHaveBeenCalledWith("Cache-Control", "no-store");
-    expect(res.json).toHaveBeenCalledWith({ error: "Something went wrong: Simulated outer scope error" });
+    expect(res.json).toHaveBeenCalledWith({ up: false });
+    expect(mock.history.post).toHaveLength(0);
   });
 });

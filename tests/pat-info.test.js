@@ -2,12 +2,9 @@
  * @file Tests for the status/pat-info cloud function.
  */
 
-import dotenv from "dotenv";
-dotenv.config();
-
 import {
   afterEach,
-  beforeAll,
+  beforeEach,
   describe,
   expect,
   it,
@@ -15,9 +12,13 @@ import {
 } from "@jest/globals";
 import axios from "axios";
 import MockAdapter from "axios-mock-adapter";
-import patInfo, { RATE_LIMIT_SECONDS } from "../api/status/pat-info.js";
+import patInfo, { ADMIN_SECRET_HEADER } from "../api/status/pat-info.js";
+
+const GRAPHQL_ENDPOINT = "https://api.github.com/graphql";
+const ADMIN_SECRET = "status-admin-secret";
 
 const mock = new MockAdapter(axios);
+const originalEnv = process.env;
 
 const successData = {
   data: {
@@ -27,9 +28,13 @@ const successData = {
   },
 };
 
-const faker = (query) => {
+const faker = (
+  query = {},
+  headers = { [ADMIN_SECRET_HEADER]: ADMIN_SECRET },
+) => {
   const req = {
     query: { ...query },
+    headers,
   };
   const res = {
     setHeader: jest.fn(),
@@ -40,7 +45,7 @@ const faker = (query) => {
   return { req, res };
 };
 
-const rate_limit_error = {
+const rateLimitError = {
   errors: [
     {
       type: "RATE_LIMITED",
@@ -54,7 +59,7 @@ const rate_limit_error = {
   },
 };
 
-const other_error = {
+const otherError = {
   errors: [
     {
       type: "SOME_ERROR",
@@ -63,32 +68,52 @@ const other_error = {
   ],
 };
 
-const bad_credentials_error = {
+const badCredentialsError = {
   message: "Bad credentials",
 };
 
+beforeEach(() => {
+  process.env = {
+    STATUS_ADMIN_SECRET: ADMIN_SECRET,
+    PAT_1: "testPAT1",
+    PAT_2: "testPAT2",
+    PAT_3: "testPAT3",
+    PAT_4: "testPAT4",
+  };
+});
+
 afterEach(() => {
   mock.reset();
+  process.env = originalEnv;
 });
 
 describe("Test /api/status/pat-info", () => {
-  beforeAll(() => {
-    // reset patenv first so that dotenv doesn't populate them with local envs
-    process.env = {};
-    process.env.PAT_1 = "testPAT1";
-    process.env.PAT_2 = "testPAT2";
-    process.env.PAT_3 = "testPAT3";
-    process.env.PAT_4 = "testPAT4";
-  });
-
-  it("should return only 'validPATs' if all PATs are valid", async () => {
-    mock
-      .onPost("https://api.github.com/graphql")
-      .replyOnce(200, rate_limit_error)
-      .onPost("https://api.github.com/graphql")
-      .reply(200, successData);
+  it("should reject unauthenticated requests without disclosing PAT details", async () => {
+    mock.onPost(GRAPHQL_ENDPOINT).reply(200, successData);
 
     const { req, res } = faker({}, {});
+    await patInfo(req, res);
+
+    expect(res.statusCode).toBe(401);
+    expect(res.setHeader.mock.calls).toEqual([
+      ["Content-Type", "application/json"],
+      ["Cache-Control", "no-store"],
+    ]);
+    expect(res.send).toHaveBeenCalledWith({ error: "Unauthorized" });
+    expect(JSON.stringify(res.send.mock.calls[0][0])).not.toMatch(
+      /PAT_1|PAT_2|remaining|resetIn|validPATs|errorPATs/,
+    );
+    expect(mock.history.post).toHaveLength(0);
+  });
+
+  it("should return only 'validPATs' if all PATs are valid for an admin request", async () => {
+    mock
+      .onPost(GRAPHQL_ENDPOINT)
+      .replyOnce(200, rateLimitError)
+      .onPost(GRAPHQL_ENDPOINT)
+      .reply(200, successData);
+
+    const { req, res } = faker();
     await patInfo(req, res);
 
     expect(res.setHeader).toHaveBeenCalledWith(
@@ -129,14 +154,14 @@ describe("Test /api/status/pat-info", () => {
     );
   });
 
-  it("should return `errorPATs` if a PAT causes an error to be thrown", async () => {
+  it("should return `errorPATs` if a PAT causes an error to be thrown for an admin request", async () => {
     mock
-      .onPost("https://api.github.com/graphql")
-      .replyOnce(200, other_error)
-      .onPost("https://api.github.com/graphql")
+      .onPost(GRAPHQL_ENDPOINT)
+      .replyOnce(200, otherError)
+      .onPost(GRAPHQL_ENDPOINT)
       .reply(200, successData);
 
-    const { req, res } = faker({}, {});
+    const { req, res } = faker();
     await patInfo(req, res);
 
     expect(res.setHeader).toHaveBeenCalledWith(
@@ -179,14 +204,14 @@ describe("Test /api/status/pat-info", () => {
     );
   });
 
-  it("should return `expiredPaths` if a PAT returns a 'Bad credentials' error", async () => {
+  it("should return `expiredPATs` if a PAT returns a 'Bad credentials' error for an admin request", async () => {
     mock
-      .onPost("https://api.github.com/graphql")
-      .replyOnce(404, bad_credentials_error)
-      .onPost("https://api.github.com/graphql")
+      .onPost(GRAPHQL_ENDPOINT)
+      .replyOnce(404, badCredentialsError)
+      .onPost(GRAPHQL_ENDPOINT)
       .reply(200, successData);
 
-    const { req, res } = faker({}, {});
+    const { req, res } = faker();
     await patInfo(req, res);
 
     expect(res.setHeader).toHaveBeenCalledWith(
@@ -225,38 +250,37 @@ describe("Test /api/status/pat-info", () => {
     );
   });
 
-  it("should throw an error if something goes wrong", async () => {
-    mock.onPost("https://api.github.com/graphql").networkError();
+  it("should throw an error if something goes wrong for an admin request", async () => {
+    mock.onPost(GRAPHQL_ENDPOINT).networkError();
 
-    const { req, res } = faker({}, {});
+    const { req, res } = faker();
     await patInfo(req, res);
 
     expect(res.setHeader).toHaveBeenCalledWith(
       "Content-Type",
       "application/json",
     );
-    expect(res.json).toHaveBeenCalledWith(
-      { error: "Something went wrong: Network Error" },
-    );
+    expect(res.json).toHaveBeenCalledWith({
+      error: "Something went wrong: Network Error",
+    });
   });
 
-  it("should have proper cache when no error is thrown", async () => {
-    mock.onPost("https://api.github.com/graphql").reply(200, successData);
+  it("should not cache PAT health details for an admin request", async () => {
+    mock.onPost(GRAPHQL_ENDPOINT).reply(200, successData);
 
-    const { req, res } = faker({}, {});
+    const { req, res } = faker();
     await patInfo(req, res);
 
     expect(res.setHeader.mock.calls).toEqual([
       ["Content-Type", "application/json"],
-      ["Cache-Control", `max-age=0, s-maxage=${RATE_LIMIT_SECONDS}`],
+      ["Cache-Control", "no-store"],
     ]);
   });
 
-  it("should have proper cache when error is thrown", async () => {
-    mock.reset();
-    mock.onPost("https://api.github.com/graphql").networkError();
+  it("should have proper cache when error is thrown for an admin request", async () => {
+    mock.onPost(GRAPHQL_ENDPOINT).networkError();
 
-    const { req, res } = faker({}, {});
+    const { req, res } = faker();
     await patInfo(req, res);
 
     expect(res.setHeader.mock.calls).toEqual([

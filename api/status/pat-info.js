@@ -1,17 +1,17 @@
 // @ts-check
 
 /**
- * @file Contains a simple cloud function that can be used to check which PATs are no
+ * @file Contains a protected cloud function that can be used to check which PATs are no
  * longer working. It returns a list of valid PATs, expired PATs and PATs with errors.
  *
- * @description This function is currently rate limited to 1 request per 5 minutes.
+ * @description This function requires an admin secret and responses are not cached.
  */
 
 import { request } from "../../src/common/http.js";
 import { logger } from "../../src/common/log.js";
 import { dateDiff } from "../../src/common/ops.js";
 
-export const RATE_LIMIT_SECONDS = 60 * 5; // 1 request per 5 minutes
+export const ADMIN_SECRET_HEADER = "x-status-admin-secret";
 
 /**
  * Simple uptime check fetcher for the PATs.
@@ -35,6 +35,35 @@ const uptimeFetcher = (variables, token) => {
     {
       Authorization: `bearer ${token}`,
     },
+  );
+};
+
+/**
+ * @param {any} req The request.
+ * @param {string} name Header name.
+ * @returns {string | undefined} Header value.
+ */
+const getHeader = (req, name) => {
+  const headers = req?.headers || {};
+  const headerName = Object.keys(headers).find(
+    (key) => key.toLowerCase() === name,
+  );
+  const value = headerName ? headers[headerName] : undefined;
+
+  return Array.isArray(value) ? value[0] : value;
+};
+
+/**
+ * @param {any} req The request.
+ * @returns {boolean} Whether the request can access PAT health details.
+ */
+const hasAdminAccess = (req) => {
+  const secret = process.env.STATUS_ADMIN_SECRET;
+  const headerSecret = getHeader(req, ADMIN_SECRET_HEADER);
+  const authorization = getHeader(req, "authorization");
+
+  return Boolean(
+    secret && (headerSecret === secret || authorization === `Bearer ${secret}`),
   );
 };
 
@@ -134,21 +163,23 @@ const getPATInfo = async (fetcher, variables) => {
 /**
  * Cloud function that returns information about the used PATs.
  *
- * @param {any} _ The request.
+ * @param {any} req The request.
  * @param {any} res The response.
  * @returns {Promise<void>} The response.
  */
-export default async (_, res) => {
+export default async (req, res) => {
   res.setHeader("Content-Type", "application/json");
+
+  if (!hasAdminAccess(req)) {
+    res.statusCode = 401;
+    res.setHeader("Cache-Control", "no-store");
+    res.send({ error: "Unauthorized" });
+    return;
+  }
+
   try {
-    // Add header to prevent abuse.
     const PATsInfo = await getPATInfo(uptimeFetcher, {});
-    if (PATsInfo) {
-      res.setHeader(
-        "Cache-Control",
-        `max-age=0, s-maxage=${RATE_LIMIT_SECONDS}`,
-      );
-    }
+    res.setHeader("Cache-Control", "no-store");
     res.send(JSON.stringify(PATsInfo, null, 2));
   } catch (err) {
     // Throw error if something went wrong.
