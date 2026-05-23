@@ -111,14 +111,8 @@ const fetchTopLanguages = async (
 
   let repoCount = 0;
 
-  repoNodes = repoNodes
-    .filter((node) => node.languages.edges.length > 0)
-    // flatten the list of language nodes
-    .reduce((acc, curr) => {
-      acc.push(...curr.languages.edges);
-      return acc;
-    }, [])
-    .reduce((acc, prev) => {
+  repoNodes = repoNodes.reduce((acc, node) => {
+    for (const prev of node.languages.edges) {
       // get the size of the language (bytes)
       let langSize = prev.size;
 
@@ -133,16 +127,16 @@ const fetchTopLanguages = async (
         // language must exist in at least one repo to be detected
         repoCount = 1;
       }
-      return {
-        ...acc,
-        [prev.node.name]: {
-          name: prev.node.name,
-          color: prev.node.color,
-          size: langSize,
-          count: repoCount,
-        },
+      acc[prev.node.name] = {
+        name: prev.node.name,
+        color: prev.node.color,
+        size: langSize,
+        count: repoCount,
       };
-    }, {});
+    }
+
+    return acc;
+  }, {});
 
   Object.keys(repoNodes).forEach((name) => {
     const node = repoNodes[name];

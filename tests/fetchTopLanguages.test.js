@@ -49,6 +49,40 @@ const data_langs = {
   },
 };
 
+const data_langs_with_empty_repo_and_tied_scores = {
+  data: {
+    user: {
+      repositories: {
+        nodes: [
+          {
+            name: "empty-repo",
+            languages: {
+              edges: [],
+            },
+          },
+          {
+            name: "typescript-repo",
+            languages: {
+              edges: [
+                { size: 100, node: { color: "#3178c6", name: "TypeScript" } },
+                { size: 40, node: { color: "#f1e05a", name: "JavaScript" } },
+              ],
+            },
+          },
+          {
+            name: "javascript-repo",
+            languages: {
+              edges: [
+                { size: 60, node: { color: "#f1e05a", name: "JavaScript" } },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  },
+};
+
 const error = {
   errors: [
     {
@@ -137,6 +171,29 @@ describe("FetchTopLanguages", () => {
         count: 2,
         name: "javascript",
         size: 2,
+      },
+    });
+  });
+
+  it("should skip repositories with no languages while preserving tied score ordering", async () => {
+    mock
+      .onPost("https://api.github.com/graphql")
+      .reply(200, data_langs_with_empty_repo_and_tied_scores);
+
+    let repo = await fetchTopLanguages("anuraghazra");
+    expect(Object.keys(repo)).toStrictEqual(["TypeScript", "JavaScript"]);
+    expect(repo).toStrictEqual({
+      TypeScript: {
+        color: "#3178c6",
+        count: 1,
+        name: "TypeScript",
+        size: 100,
+      },
+      JavaScript: {
+        color: "#f1e05a",
+        count: 2,
+        name: "JavaScript",
+        size: 100,
       },
     });
   });
