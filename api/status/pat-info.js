@@ -71,10 +71,115 @@ const getAllPATs = () => {
   return Object.keys(process.env).filter((key) => /PAT_\d*$/.exec(key));
 };
 
+const PAT_CHECK_CONCURRENCY = 3;
+
 /**
  * @typedef {(variables: any, token: string) => Promise<import('axios').AxiosResponse>} Fetcher The fetcher function.
  * @typedef {{validPATs: string[], expiredPATs: string[], exhaustedPATs: string[], suspendedPATs: string[], errorPATs: string[], details: any}} PATInfo The PAT info.
  */
+
+/**
+ * Check a single PAT status.
+ *
+ * @param {Fetcher} fetcher The fetcher function.
+ * @param {any} variables Fetcher variables.
+ * @param {string} pat The PAT environment variable name.
+ * @returns {Promise<any>} The PAT status details.
+ */
+const getPATDetails = async (fetcher, variables, pat) => {
+  try {
+    const response = await fetcher(variables, process.env[pat]);
+    const errors = response.data.errors;
+    const hasErrors = Boolean(errors);
+    const errorType = errors?.[0]?.type;
+    const isRateLimited =
+      (hasErrors && errorType === "RATE_LIMITED") ||
+      response.data.data?.rateLimit?.remaining === 0;
+
+    // Store PATs with errors.
+    if (hasErrors && errorType !== "RATE_LIMITED") {
+      return {
+        status: "error",
+        error: {
+          type: errors[0].type,
+          message: errors[0].message,
+        },
+      };
+    } else if (isRateLimited) {
+      const date1 = new Date();
+      const date2 = new Date(response.data?.data?.rateLimit?.resetAt);
+      return {
+        status: "exhausted",
+        remaining: 0,
+        resetIn: dateDiff(date2, date1) + " minutes",
+      };
+    } else {
+      return {
+        status: "valid",
+        remaining: response.data.data.rateLimit.remaining,
+      };
+    }
+  } catch (err) {
+    // Store the PAT if it is expired.
+    const errorMessage = err.response?.data?.message?.toLowerCase();
+    if (errorMessage === "bad credentials") {
+      return {
+        status: "expired",
+      };
+    } else if (errorMessage === "sorry. your account was suspended.") {
+      return {
+        status: "suspended",
+      };
+    } else {
+      throw err;
+    }
+  }
+};
+
+/**
+ * Check PAT statuses with a small concurrency limit.
+ *
+ * @param {Fetcher} fetcher The fetcher function.
+ * @param {any} variables Fetcher variables.
+ * @param {string[]} PATs The PAT environment variable names.
+ * @returns {Promise<any[]>} The PAT status details in PAT order.
+ */
+const getPATDetailsWithConcurrency = async (fetcher, variables, PATs) => {
+  const details = Array(PATs.length);
+  const errors = Array(PATs.length);
+  let hasUnexpectedError = false;
+  let nextIndex = 0;
+
+  const workers = Array.from(
+    { length: Math.min(PAT_CHECK_CONCURRENCY, PATs.length) },
+    async () => {
+      while (!hasUnexpectedError && nextIndex < PATs.length) {
+        const currentIndex = nextIndex;
+        nextIndex += 1;
+
+        try {
+          details[currentIndex] = await getPATDetails(
+            fetcher,
+            variables,
+            PATs[currentIndex],
+          );
+        } catch (err) {
+          errors[currentIndex] = err;
+          hasUnexpectedError = true;
+        }
+      }
+    },
+  );
+
+  await Promise.all(workers);
+  const unexpectedErrorIndex = errors.findIndex((_, index) => index in errors);
+
+  if (unexpectedErrorIndex !== -1) {
+    throw errors[unexpectedErrorIndex];
+  }
+
+  return details;
+};
 
 /**
  * Check whether any of the PATs is expired.
@@ -87,57 +192,15 @@ const getPATInfo = async (fetcher, variables) => {
   /** @type {Record<string, any>} */
   const details = {};
   const PATs = getAllPATs();
+  const PATDetails = await getPATDetailsWithConcurrency(
+    fetcher,
+    variables,
+    PATs,
+  );
 
-  for (const pat of PATs) {
-    try {
-      const response = await fetcher(variables, process.env[pat]);
-      const errors = response.data.errors;
-      const hasErrors = Boolean(errors);
-      const errorType = errors?.[0]?.type;
-      const isRateLimited =
-        (hasErrors && errorType === "RATE_LIMITED") ||
-        response.data.data?.rateLimit?.remaining === 0;
-
-      // Store PATs with errors.
-      if (hasErrors && errorType !== "RATE_LIMITED") {
-        details[pat] = {
-          status: "error",
-          error: {
-            type: errors[0].type,
-            message: errors[0].message,
-          },
-        };
-        continue;
-      } else if (isRateLimited) {
-        const date1 = new Date();
-        const date2 = new Date(response.data?.data?.rateLimit?.resetAt);
-        details[pat] = {
-          status: "exhausted",
-          remaining: 0,
-          resetIn: dateDiff(date2, date1) + " minutes",
-        };
-      } else {
-        details[pat] = {
-          status: "valid",
-          remaining: response.data.data.rateLimit.remaining,
-        };
-      }
-    } catch (err) {
-      // Store the PAT if it is expired.
-      const errorMessage = err.response?.data?.message?.toLowerCase();
-      if (errorMessage === "bad credentials") {
-        details[pat] = {
-          status: "expired",
-        };
-      } else if (errorMessage === "sorry. your account was suspended.") {
-        details[pat] = {
-          status: "suspended",
-        };
-      } else {
-        throw err;
-      }
-    }
-  }
+  PATs.forEach((pat, index) => {
+    details[pat] = PATDetails[index];
+  });
 
   const filterPATsByStatus = (status) => {
     return Object.keys(details).filter((pat) => details[pat].status === status);
