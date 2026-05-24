@@ -228,6 +228,23 @@ describe("Test fetchStats", () => {
     );
   });
 
+  it("should keep GraphQL error priority when include_all_commits true", async () => {
+    mock.reset();
+    let restCalls = 0;
+    mock.onPost("https://api.github.com/graphql").reply(200, error);
+    mock
+      .onGet("https://api.github.com/search/commits?q=author:anuraghazra")
+      .reply(() => {
+        restCalls += 1;
+        return [200, { error: "Some test error message" }];
+      });
+
+    await expect(fetchStats("anuraghazra", true)).rejects.toThrow(
+      "Could not resolve to a User with the login of 'noname'.",
+    );
+    expect(restCalls).toBe(1);
+  });
+
   it("should fetch total commits", async () => {
     mock
       .onGet("https://api.github.com/search/commits?q=author:anuraghazra")

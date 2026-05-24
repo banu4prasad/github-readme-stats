@@ -1,7 +1,7 @@
 import api from "../../api/index.js";
 import axios from "axios";
 import MockAdapter from "axios-mock-adapter";
-import { it, jest } from "@jest/globals";
+import { expect, it, jest } from "@jest/globals";
 import { runAndLogStats } from "./utils.js";
 
 const stats = {
@@ -18,6 +18,13 @@ const stats = {
   contributedTo: 50,
   rank: null,
 };
+
+const totalCommits = 1000;
+const UPSTREAM_DELAY_MS = 50;
+const LATENCY_BENCH_OPTIONS = { runs: 10, warmup: 2 };
+const GITHUB_GRAPHQL_URL = "https://api.github.com/graphql";
+const GITHUB_TOTAL_COMMITS_URL =
+  "https://api.github.com/search/commits?q=author:anuraghazra";
 
 const data_stats = {
   data: {
@@ -54,9 +61,26 @@ const data_stats = {
   },
 };
 
+const data_total_commits = {
+  total_count: totalCommits,
+};
+
+const error = {
+  errors: [
+    {
+      type: "NOT_FOUND",
+      path: ["user"],
+      locations: [],
+      message: "Could not fetch user",
+    },
+  ],
+};
+
 const mock = new MockAdapter(axios);
 
-const faker = (query, data) => {
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const faker = (query) => {
   const req = {
     query: {
       username: "anuraghazra",
@@ -67,15 +91,90 @@ const faker = (query, data) => {
     setHeader: jest.fn(),
     send: jest.fn(),
   };
-  mock.onPost("https://api.github.com/graphql").replyOnce(200, data);
 
   return { req, res };
 };
 
-it("test /api", async () => {
-  await runAndLogStats("test /api", async () => {
-    const { req, res } = faker({}, data_stats);
+const mockStatsResponse = () => {
+  mock.reset();
+  mock.onPost(GITHUB_GRAPHQL_URL).reply(200, data_stats);
+};
 
-    await api(req, res);
+const mockStatsWithTotalCommitsResponse = () => {
+  mockStatsResponse();
+  mock.onGet(GITHUB_TOTAL_COMMITS_URL).reply(200, data_total_commits);
+};
+
+const mockDelayedStatsWithTotalCommitsResponse = () => {
+  mock.reset();
+  mock.onPost(GITHUB_GRAPHQL_URL).reply(async () => {
+    await delay(UPSTREAM_DELAY_MS);
+    return [200, data_stats];
   });
+  mock.onGet(GITHUB_TOTAL_COMMITS_URL).reply(async () => {
+    await delay(UPSTREAM_DELAY_MS);
+    return [200, data_total_commits];
+  });
+};
+
+const mockStatsErrorWithTotalCommitsResponse = () => {
+  let restCalls = 0;
+  mock.reset();
+  mock.onPost(GITHUB_GRAPHQL_URL).reply(200, error);
+  mock.onGet(GITHUB_TOTAL_COMMITS_URL).reply(() => {
+    restCalls += 1;
+    return [200, data_total_commits];
+  });
+
+  return {
+    getRestCalls: () => restCalls,
+  };
+};
+
+const benchApi = async (name, query, mockResponses, options) => {
+  mockResponses();
+
+  await runAndLogStats(
+    name,
+    async () => {
+      const { req, res } = faker(query);
+
+      await api(req, res);
+    },
+    options,
+  );
+};
+
+it("test /api", async () => {
+  await benchApi("test /api", {}, mockStatsResponse);
+});
+
+it("test /api include_all_commits", async () => {
+  await benchApi(
+    "test /api include_all_commits",
+    { include_all_commits: "true" },
+    mockStatsWithTotalCommitsResponse,
+  );
+});
+
+it("test /api include_all_commits delayed upstreams", async () => {
+  await benchApi(
+    "test /api include_all_commits delayed upstreams",
+    { include_all_commits: "true" },
+    mockDelayedStatsWithTotalCommitsResponse,
+    LATENCY_BENCH_OPTIONS,
+  );
+});
+
+it("test /api include_all_commits GraphQL error starts REST", async () => {
+  const { getRestCalls } = mockStatsErrorWithTotalCommitsResponse();
+  const { req, res } = faker({ include_all_commits: "true" });
+
+  await api(req, res);
+
+  console.log(
+    `test /api include_all_commits GraphQL error starts REST | restCalls=${getRestCalls()}`,
+  );
+
+  expect(getRestCalls()).toBe(1);
 });

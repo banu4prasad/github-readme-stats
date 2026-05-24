@@ -304,6 +304,13 @@ const fetchStats = async (
     rank: { level: "C", percentile: 100 },
   };
 
+  const totalCommitsPromise = include_all_commits
+    ? totalCommitsFetcher(username)
+    : null;
+  // GraphQL errors stay authoritative, so handle early REST failures even if
+  // the GraphQL path returns before this promise is awaited.
+  totalCommitsPromise?.catch(() => {});
+
   let res = await statsFetcher({
     username,
     includeMergedPullRequests: include_merged_pull_requests,
@@ -338,7 +345,7 @@ const fetchStats = async (
 
   // if include_all_commits, fetch all commits using the REST API.
   if (include_all_commits) {
-    stats.totalCommits = await totalCommitsFetcher(username);
+    stats.totalCommits = await totalCommitsPromise;
   } else {
     stats.totalCommits = user.commits.totalCommitContributions;
   }

@@ -145,6 +145,32 @@ describe("Test /api/", () => {
     );
   });
 
+  it("should keep GraphQL error card when include_all_commits true", async () => {
+    let restCalls = 0;
+    mock
+      .onGet("https://api.github.com/search/commits?q=author:anuraghazra")
+      .reply(() => {
+        restCalls += 1;
+        return [200, { error: "Some test error message" }];
+      });
+    const { req, res } = faker(
+      { username: "anuraghazra", include_all_commits: true },
+      error,
+    );
+
+    await api(req, res);
+
+    expect(res.setHeader).toHaveBeenCalledWith("Content-Type", "image/svg+xml");
+    expect(res.send).toHaveBeenCalledWith(
+      renderError({
+        message: error.errors[0].message,
+        secondaryMessage:
+          "Make sure the provided username is not an organization",
+      }),
+    );
+    expect(restCalls).toBe(1);
+  });
+
   it("should render error card in same theme as requested card", async () => {
     const { req, res } = faker({ theme: "merko" }, error);
 
