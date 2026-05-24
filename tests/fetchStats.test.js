@@ -551,6 +551,8 @@ describe("Test fetchStats", () => {
 });
 
 describe("Test fetchStats with all_time_contribs", () => {
+  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
   // Mock data for all-time contributions
   const data_contribution_years = {
     data: {
@@ -590,6 +592,9 @@ describe("Test fetchStats with all_time_contribs", () => {
   afterEach(() => {
     delete process.env.ALL_TIME_CONTRIBS;
     delete process.env.ALL_TIME_CONTRIBS_TIMEOUT_MS;
+    delete process.env.ALL_TIME_CONTRIBS_REQUEST_BUDGET_MS;
+    delete process.env.ALL_TIME_CONTRIBS_SAFETY_MARGIN_MS;
+    delete process.env.ALL_TIME_CONTRIBS_MIN_TIMEOUT_MS;
     mock.reset();
   });
 
@@ -720,5 +725,104 @@ describe("Test fetchStats with all_time_contribs", () => {
 
     // Should fallback to last year's count due to timeout
     expect(stats.contributedTo).toBe(61);
+  });
+
+  it("should use the normal all-time timeout when base stats are fast", async () => {
+    process.env.ALL_TIME_CONTRIBS_TIMEOUT_MS = "200";
+    process.env.ALL_TIME_CONTRIBS_REQUEST_BUDGET_MS = "400";
+    process.env.ALL_TIME_CONTRIBS_SAFETY_MARGIN_MS = "100";
+    process.env.ALL_TIME_CONTRIBS_MIN_TIMEOUT_MS = "20";
+    let graphQLCalls = 0;
+    let yearlyContributionCalls = 0;
+
+    mock.reset();
+    mock.onPost("https://api.github.com/graphql").reply(async (cfg) => {
+      graphQLCalls += 1;
+      const req = JSON.parse(cfg.data);
+      if (req.query.includes("totalCommitContributions")) {
+        return [200, data_stats];
+      }
+      if (req.query.includes("contributionYears")) {
+        await delay(150);
+        return [200, data_contribution_years];
+      }
+      if (req.query.includes("commitContributionsByRepository")) {
+        yearlyContributionCalls += 1;
+        return [200, data_year_contributions];
+      }
+      return [200, data_repo];
+    });
+
+    const stats = await fetchStats("anuraghazra", false, true);
+
+    expect(stats.contributedTo).toBe(3);
+    expect(graphQLCalls).toBe(4);
+    expect(yearlyContributionCalls).toBe(2);
+  });
+
+  it("should reduce the all-time timeout when base stats consume request budget", async () => {
+    process.env.ALL_TIME_CONTRIBS_TIMEOUT_MS = "250";
+    process.env.ALL_TIME_CONTRIBS_REQUEST_BUDGET_MS = "400";
+    process.env.ALL_TIME_CONTRIBS_SAFETY_MARGIN_MS = "100";
+    process.env.ALL_TIME_CONTRIBS_MIN_TIMEOUT_MS = "20";
+    let graphQLCalls = 0;
+    let yearlyContributionCalls = 0;
+
+    mock.reset();
+    mock.onPost("https://api.github.com/graphql").reply(async (cfg) => {
+      graphQLCalls += 1;
+      const req = JSON.parse(cfg.data);
+      if (req.query.includes("totalCommitContributions")) {
+        await delay(150);
+        return [200, data_stats];
+      }
+      if (req.query.includes("contributionYears")) {
+        await delay(220);
+        return [200, data_contribution_years];
+      }
+      if (req.query.includes("commitContributionsByRepository")) {
+        yearlyContributionCalls += 1;
+        return [200, data_year_contributions];
+      }
+      return [200, data_repo];
+    });
+
+    const startedAt = Date.now();
+    const stats = await fetchStats("anuraghazra", false, true);
+    const durationMs = Date.now() - startedAt;
+
+    expect(stats.contributedTo).toBe(61);
+    expect(graphQLCalls).toBe(2);
+    expect(yearlyContributionCalls).toBe(0);
+    expect(durationMs).toBeLessThan(350);
+
+    await delay(240);
+  });
+
+  it("should immediately fallback when the remaining request budget is exhausted", async () => {
+    process.env.ALL_TIME_CONTRIBS_TIMEOUT_MS = "1000";
+    process.env.ALL_TIME_CONTRIBS_REQUEST_BUDGET_MS = "120";
+    process.env.ALL_TIME_CONTRIBS_SAFETY_MARGIN_MS = "60";
+    process.env.ALL_TIME_CONTRIBS_MIN_TIMEOUT_MS = "50";
+    let graphQLCalls = 0;
+
+    mock.reset();
+    mock.onPost("https://api.github.com/graphql").reply(async (cfg) => {
+      graphQLCalls += 1;
+      const req = JSON.parse(cfg.data);
+      if (req.query.includes("totalCommitContributions")) {
+        await delay(80);
+        return [200, data_stats];
+      }
+      return [200, data_contribution_years];
+    });
+
+    const startedAt = Date.now();
+    const stats = await fetchStats("anuraghazra", false, true);
+    const durationMs = Date.now() - startedAt;
+
+    expect(stats.contributedTo).toBe(61);
+    expect(graphQLCalls).toBe(1);
+    expect(durationMs).toBeLessThan(150);
   });
 });

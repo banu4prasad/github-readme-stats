@@ -10,6 +10,9 @@ import {
   excludeRepositories,
   isAllTimeContribsEnabled,
   getAllTimeContribsTimeoutMs,
+  getAllTimeContribsRequestBudgetMs,
+  getAllTimeContribsSafetyMarginMs,
+  getAllTimeContribsMinTimeoutMs,
 } from "../common/envs.js";
 import { CustomError, MissingParamError } from "../common/error.js";
 import { wrapTextMultiline } from "../common/fmt.js";
@@ -92,6 +95,28 @@ const GRAPHQL_STATS_QUERY = `
 `;
 
 const REVIEWED_PULL_REQUESTS_SEARCH_FALLBACK = "is:pr reviewed-by:octocat";
+
+/**
+ * Calculates how much time all-time contributions may use without pushing the
+ * overall stats request too close to the serverless maxDuration.
+ *
+ * @param {number} elapsedMs Milliseconds already spent in the stats request.
+ * @returns {{configuredTimeoutMs: number, remainingSafeBudgetMs: number, timeoutMs: number, minTimeoutMs: number}} Timeout budget details.
+ */
+const getAllTimeContribsTimeoutBudget = (elapsedMs) => {
+  const configuredTimeoutMs = getAllTimeContribsTimeoutMs();
+  const remainingSafeBudgetMs =
+    getAllTimeContribsRequestBudgetMs() -
+    getAllTimeContribsSafetyMarginMs() -
+    elapsedMs;
+
+  return {
+    configuredTimeoutMs,
+    remainingSafeBudgetMs,
+    timeoutMs: Math.min(configuredTimeoutMs, remainingSafeBudgetMs),
+    minTimeoutMs: getAllTimeContribsMinTimeoutMs(),
+  };
+};
 
 const getReviewedPullRequestsSearchQuery = (username) =>
   githubUsernameRegex.test(username)
@@ -304,6 +329,8 @@ const fetchStats = async (
     rank: { level: "C", percentile: 100 },
   };
 
+  const requestStartedAtMs = Date.now();
+
   const totalCommitsPromise = include_all_commits
     ? totalCommitsFetcher(username)
     : null;
@@ -375,14 +402,39 @@ const fetchStats = async (
     const abortController = new AbortController();
     let allTimePromise;
     try {
-      // Add timeout protection to stay within Vercel's execution limits
-      const timeoutMs = getAllTimeContribsTimeoutMs();
+      const elapsedBeforeAllTimeMs = Date.now() - requestStartedAtMs;
+      const {
+        configuredTimeoutMs,
+        remainingSafeBudgetMs,
+        timeoutMs,
+        minTimeoutMs,
+      } = getAllTimeContribsTimeoutBudget(elapsedBeforeAllTimeMs);
+
+      if (remainingSafeBudgetMs < minTimeoutMs) {
+        throw new Error(
+          `All-time contributions skipped: remaining request budget ${Math.max(
+            0,
+            Math.floor(remainingSafeBudgetMs),
+          )}ms is below the minimum ${minTimeoutMs}ms`,
+        );
+      }
+
+      // Add timeout protection to stay within Vercel's execution limits.
+      const effectiveTimeoutMs = Math.max(0, Math.floor(timeoutMs));
+      if (effectiveTimeoutMs < configuredTimeoutMs) {
+        logger.log(
+          `All-time contributions timeout reduced from ${configuredTimeoutMs}ms to ${effectiveTimeoutMs}ms after ${Math.floor(
+            elapsedBeforeAllTimeMs,
+          )}ms elapsed`,
+        );
+      }
+
       const timeoutPromise = new Promise((_, reject) => {
         timeoutId = setTimeout(() => {
           didTimeout = true;
           abortController.abort();
           reject(new Error("All-time contributions fetch timed out"));
-        }, timeoutMs);
+        }, effectiveTimeoutMs);
       });
 
       allTimePromise = fetchAllTimeContributions(username, {

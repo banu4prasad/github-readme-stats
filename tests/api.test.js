@@ -92,6 +92,105 @@ const error = {
 };
 
 const mock = new MockAdapter(axios);
+const GITHUB_GRAPHQL_URL = "https://api.github.com/graphql";
+
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const createContributionYearsData = (yearCount, startYear = 2024) => ({
+  data: {
+    user: {
+      contributionsCollection: {
+        contributionYears: Array.from(
+          { length: yearCount },
+          (_, index) => startYear - index,
+        ),
+      },
+    },
+  },
+});
+
+const createYearContributionsData = (year) => ({
+  data: {
+    user: {
+      contributionsCollection: {
+        commitContributionsByRepository: [
+          { repository: { nameWithOwner: `user/repo-${year}` } },
+        ],
+        issueContributionsByRepository: [],
+        pullRequestContributionsByRepository: [],
+        pullRequestReviewContributionsByRepository: [],
+      },
+    },
+  },
+});
+
+const createApiRequest = (query = {}) => ({
+  req: {
+    query: {
+      username: "anuraghazra",
+      ...query,
+    },
+  },
+  res: {
+    setHeader: jest.fn(),
+    send: jest.fn(),
+  },
+});
+
+const extractStatValue = (svg, testId) => {
+  const match = svg.match(
+    new RegExp(`data-testid="${testId}"[\\s\\S]*?>([^<]+)</text>`),
+  );
+  return match?.[1].trim();
+};
+
+const mockAllTimeApiResponses = ({
+  yearCount,
+  baseDelayMs = 0,
+  contributionYearsDelayMs = 0,
+  yearlyDelayMs = 0,
+}) => {
+  let graphQLCalls = 0;
+  let contributionYearsCalls = 0;
+  let yearlyContributionCalls = 0;
+  const years = createContributionYearsData(yearCount);
+
+  mock.onPost(GITHUB_GRAPHQL_URL).reply(async (cfg) => {
+    graphQLCalls += 1;
+    const req = JSON.parse(cfg.data);
+
+    if (req.query.includes("totalCommitContributions")) {
+      if (baseDelayMs) {
+        await delay(baseDelayMs);
+      }
+      return [200, data_stats];
+    }
+
+    if (req.query.includes("contributionYears")) {
+      contributionYearsCalls += 1;
+      if (contributionYearsDelayMs) {
+        await delay(contributionYearsDelayMs);
+      }
+      return [200, years];
+    }
+
+    if (req.query.includes("commitContributionsByRepository")) {
+      yearlyContributionCalls += 1;
+      if (yearlyDelayMs) {
+        await delay(yearlyDelayMs);
+      }
+      return [200, createYearContributionsData(req.variables.from.slice(0, 4))];
+    }
+
+    return [500, { error: "Unexpected GraphQL request" }];
+  });
+
+  return {
+    getGraphQLCalls: () => graphQLCalls,
+    getContributionYearsCalls: () => contributionYearsCalls,
+    getYearlyContributionCalls: () => yearlyContributionCalls,
+  };
+};
 
 // @ts-ignore
 const faker = (query, data) => {
@@ -536,5 +635,102 @@ describe("Test /api/", () => {
         commits_year: 2023,
       }),
     );
+  });
+});
+
+describe("Test /api/ all_time_contribs timeout budget behavior", () => {
+  const originalEnv = {
+    ALL_TIME_CONTRIBS: process.env.ALL_TIME_CONTRIBS,
+    ALL_TIME_CONTRIBS_CONCURRENCY: process.env.ALL_TIME_CONTRIBS_CONCURRENCY,
+    ALL_TIME_CONTRIBS_TIMEOUT_MS: process.env.ALL_TIME_CONTRIBS_TIMEOUT_MS,
+    ALL_TIME_CONTRIBS_REQUEST_BUDGET_MS:
+      process.env.ALL_TIME_CONTRIBS_REQUEST_BUDGET_MS,
+    ALL_TIME_CONTRIBS_SAFETY_MARGIN_MS:
+      process.env.ALL_TIME_CONTRIBS_SAFETY_MARGIN_MS,
+    ALL_TIME_CONTRIBS_MIN_TIMEOUT_MS:
+      process.env.ALL_TIME_CONTRIBS_MIN_TIMEOUT_MS,
+  };
+
+  beforeEach(() => {
+    process.env.ALL_TIME_CONTRIBS = "true";
+    process.env.ALL_TIME_CONTRIBS_CONCURRENCY = "3";
+    process.env.ALL_TIME_CONTRIBS_TIMEOUT_MS = "1000";
+  });
+
+  afterEach(() => {
+    Object.entries(originalEnv).forEach(([key, value]) => {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    });
+  });
+
+  it("should make one main query, one years query, and one query per contribution year", async () => {
+    const metrics = mockAllTimeApiResponses({ yearCount: 10 });
+    const { req, res } = createApiRequest({
+      all_time_contribs: "true",
+      number_format: "long",
+    });
+
+    await api(req, res);
+
+    const renderedCard = res.send.mock.calls[0][0];
+    expect(metrics.getGraphQLCalls()).toBe(12);
+    expect(metrics.getContributionYearsCalls()).toBe(1);
+    expect(metrics.getYearlyContributionCalls()).toBe(10);
+    expect(extractStatValue(renderedCard, "contribs")).toBe("10");
+  });
+
+  it("should complete delayed all-time work before the configured timeout", async () => {
+    process.env.ALL_TIME_CONTRIBS_TIMEOUT_MS = "500";
+    const metrics = mockAllTimeApiResponses({
+      yearCount: 5,
+      baseDelayMs: 50,
+      yearlyDelayMs: 40,
+    });
+    const { req, res } = createApiRequest({
+      all_time_contribs: "true",
+      number_format: "long",
+    });
+
+    const startedAt = Date.now();
+    await api(req, res);
+    const durationMs = Date.now() - startedAt;
+
+    const renderedCard = res.send.mock.calls[0][0];
+    expect(metrics.getGraphQLCalls()).toBe(7);
+    expect(metrics.getYearlyContributionCalls()).toBe(5);
+    expect(extractStatValue(renderedCard, "contribs")).toBe("5");
+    expect(durationMs).toBeLessThan(500);
+  });
+
+  it("should fallback when all-time work exceeds the configured timeout after base stats", async () => {
+    process.env.ALL_TIME_CONTRIBS_TIMEOUT_MS = "20";
+    const metrics = mockAllTimeApiResponses({
+      yearCount: 5,
+      baseDelayMs: 30,
+      contributionYearsDelayMs: 60,
+    });
+    const { req, res } = createApiRequest({
+      all_time_contribs: "true",
+      number_format: "long",
+    });
+
+    const startedAt = Date.now();
+    await api(req, res);
+    const durationMs = Date.now() - startedAt;
+
+    const renderedCard = res.send.mock.calls[0][0];
+    expect(metrics.getGraphQLCalls()).toBe(2);
+    expect(metrics.getContributionYearsCalls()).toBe(1);
+    expect(metrics.getYearlyContributionCalls()).toBe(0);
+    expect(extractStatValue(renderedCard, "contribs")).toBe(
+      String(stats.contributedTo),
+    );
+    expect(durationMs).toBeLessThan(200);
+
+    await delay(70);
   });
 });
