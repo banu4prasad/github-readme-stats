@@ -18,16 +18,26 @@ import { clampValue } from "./ops.js";
  */
 const flexLayout = ({ items, gap, direction, sizes = [] }) => {
   let lastSize = 0;
-  // filter() for filtering out empty strings
-  return items.filter(Boolean).map((item, i) => {
-    const size = sizes[i] || 0;
+  let itemIndex = 0;
+  const layout = [];
+
+  for (const item of items) {
+    // Filter out falsy items such as empty strings.
+    if (!item) {
+      continue;
+    }
+
+    const size = sizes[itemIndex] || 0;
     let transform = `translate(${lastSize}, 0)`;
     if (direction === "column") {
       transform = `translate(0, ${lastSize})`;
     }
     lastSize += size + gap;
-    return `<g transform="${transform}">${item}</g>`;
-  });
+    layout.push(`<g transform="${transform}">${item}</g>`);
+    itemIndex += 1;
+  }
+
+  return layout;
 };
 
 /**

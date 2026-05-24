@@ -44,4 +44,17 @@ describe("flexLayout", () => {
       `<g transform="translate(415, 0)"><text>4</text></g>`,
     ]);
   });
+
+  it("should keep sizes aligned to rendered items after filtering empty strings", () => {
+    const layout = flexLayout({
+      items: ["", "<text>1</text>", "", "<text>2</text>"],
+      gap: 20,
+      sizes: [200, 100],
+    });
+
+    expect(layout).toStrictEqual([
+      `<g transform="translate(0, 0)"><text>1</text></g>`,
+      `<g transform="translate(220, 0)"><text>2</text></g>`,
+    ]);
+  });
 });
