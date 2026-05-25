@@ -358,6 +358,43 @@ describe("Test fetchStats", () => {
     });
   });
 
+  it("should stop pagination and surface the error when page 2 returns GraphQL errors", async () => {
+    process.env.FETCH_MULTI_PAGE_STARS = "true";
+    mock.reset();
+
+    const graphQLRequests = [];
+    const pageTwoError = {
+      errors: [
+        {
+          type: "GRAPHQL_ERROR",
+          message: "Second page pagination failed",
+        },
+      ],
+    };
+
+    mock.onPost("https://api.github.com/graphql").reply((cfg) => {
+      const req = JSON.parse(cfg.data);
+      graphQLRequests.push(req);
+
+      if (graphQLRequests.length === 1) {
+        return [200, data_stats];
+      }
+
+      if (graphQLRequests.length === 2) {
+        return [200, pageTwoError];
+      }
+
+      return [200, data_repo];
+    });
+
+    await expect(fetchStats("anuraghazra")).rejects.toThrow(
+      "Second page pagination failed",
+    );
+    expect(graphQLRequests).toHaveLength(2);
+    expect(graphQLRequests[0].variables.after).toBeNull();
+    expect(graphQLRequests[1].variables.after).toBe("cursor");
+  });
+
   it("should fetch one page of stars if 'FETCH_MULTI_PAGE_STARS' env variable is set to `false`", async () => {
     process.env.FETCH_MULTI_PAGE_STARS = "false";
 
