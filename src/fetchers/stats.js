@@ -476,13 +476,12 @@ const fetchStats = async (
   const allExcludedRepos = [...exclude_repo, ...excludeRepositories];
   let repoToHide = new Set(allExcludedRepos);
 
-  stats.totalStars = user.repositories.nodes
-    .filter((data) => {
-      return !repoToHide.has(data.name);
-    })
-    .reduce((prev, curr) => {
-      return prev + curr.stargazers.totalCount;
-    }, 0);
+  stats.totalStars = user.repositories.nodes.reduce((prev, curr) => {
+    if (repoToHide.has(curr.name)) {
+      return prev;
+    }
+    return prev + curr.stargazers.totalCount;
+  }, 0);
 
   stats.rank = calculateRank({
     all_commits: include_all_commits,
