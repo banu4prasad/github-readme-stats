@@ -80,4 +80,16 @@ describe("Test Retryer", () => {
       expect(err.message).toBe("Downtime due to GitHub API rate limiting");
     }
   });
+
+  it("retryer should abort before calling fetcher when signal is already aborted", async () => {
+    const abortableFetcher = jest.fn();
+
+    await expect(
+      retryer(abortableFetcher, {}, { signal: { aborted: true } }),
+    ).rejects.toMatchObject({
+      name: "AbortError",
+      message: "Request aborted",
+    });
+    expect(abortableFetcher).not.toHaveBeenCalled();
+  });
 });

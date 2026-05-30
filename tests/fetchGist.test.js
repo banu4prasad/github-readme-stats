@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "@jest/globals";
 import "@testing-library/jest-dom";
 import axios from "axios";
 import MockAdapter from "axios-mock-adapter";
+import { MissingParamError } from "../src/common/error.js";
 import { fetchGist } from "../src/fetchers/gist.js";
 
 const gist_data = {
@@ -109,9 +110,18 @@ describe("Test fetchGist", () => {
     );
   });
 
-  it("should throw error if id is not provided", async () => {
-    await expect(fetchGist()).rejects.toThrow(
-      'Missing params "id" make sure you pass the parameters in URL',
-    );
-  });
+  it.each([
+    ["missing", () => fetchGist()],
+    ["empty", () => fetchGist("")],
+  ])(
+    "should throw MissingParamError if id is %s",
+    async (_label, fetchGistWithoutId) => {
+      await expect(fetchGistWithoutId()).rejects.toThrow(MissingParamError);
+      await expect(fetchGistWithoutId()).rejects.toMatchObject({
+        message: 'Missing params "id" make sure you pass the parameters in URL',
+        missedParams: ["id"],
+        secondaryMessage: "/api/gist?id=GIST_ID",
+      });
+    },
+  );
 });
