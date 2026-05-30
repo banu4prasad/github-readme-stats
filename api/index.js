@@ -12,7 +12,11 @@ import {
   MissingParamError,
   retrieveSecondaryMessage,
 } from "../src/common/error.js";
-import { parseArray, parseBoolean } from "../src/common/ops.js";
+import {
+  parseArray,
+  parseBoolean,
+  parseBorderRadius,
+} from "../src/common/ops.js";
 import { getQueryParams } from "../src/common/query.js";
 import { renderError } from "../src/common/render.js";
 import { fetchStats } from "../src/fetchers/stats.js";
@@ -136,7 +140,7 @@ export default async (req, res) => {
       bg_color,
       theme,
       custom_title,
-      border_radius,
+      border_radius: parseBorderRadius(border_radius),
       border_color,
       number_format,
       number_precision: number_precision

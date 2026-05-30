@@ -99,6 +99,67 @@ describe("Test /api/pin", () => {
     );
   });
 
+  it("should render numeric border_radius query option", async () => {
+    const req = {
+      query: {
+        username: "anuraghazra",
+        repo: "convoychat",
+        border_radius: "10",
+      },
+    };
+    const res = {
+      setHeader: jest.fn(),
+      send: jest.fn(),
+    };
+    mock.onPost("https://api.github.com/graphql").reply(200, data_user);
+
+    await pin(req, res);
+
+    const svg = res.send.mock.calls[0][0];
+    document.body.innerHTML = svg;
+    expect(svg).toContain(`rx="10"`);
+    expect(document.querySelector("[data-testid='card-bg']")).toHaveAttribute(
+      "rx",
+      "10",
+    );
+  });
+
+  it("should sanitize malicious border_radius query values", async () => {
+    const payloads = [
+      `" /><desc id="xss-test">border-radius-injected</desc><rect rx="`,
+      `" /><script>document.documentElement.dataset.xss=1</script><rect rx="`,
+    ];
+    mock.onPost("https://api.github.com/graphql").reply(200, data_user);
+
+    for (const border_radius of payloads) {
+      const req = {
+        query: {
+          username: "anuraghazra",
+          repo: "convoychat",
+          border_radius,
+        },
+      };
+      const res = {
+        setHeader: jest.fn(),
+        send: jest.fn(),
+      };
+
+      await pin(req, res);
+
+      const svg = res.send.mock.calls[0][0];
+      document.body.innerHTML = svg;
+      expect(svg).not.toContain("border-radius-injected");
+      expect(svg).not.toContain("<script>");
+      expect(svg).not.toContain("document.documentElement.dataset.xss");
+      expect(document.querySelector("[data-testid='card-bg']")).toHaveAttribute(
+        "rx",
+        "4.5",
+      );
+      expect(document.querySelector("#xss-test")).toBeNull();
+      expect(document.querySelector("script")).toBeNull();
+    }
+  });
+
   it("should render error card if user repo not found", async () => {
     const req = {
       query: {

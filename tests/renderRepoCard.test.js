@@ -328,6 +328,35 @@ describe("Test renderRepoCard", () => {
     expect(document.querySelector("rect")).toHaveAttribute("rx", "4.5");
   });
 
+  it("should render custom border radius", () => {
+    document.body.innerHTML = renderRepoCard(data_repo.repository, {
+      border_radius: "10",
+    });
+    expect(queryByTestId(document.body, "card-bg")).toHaveAttribute("rx", "10");
+  });
+
+  it("should sanitize malicious border radius payloads", () => {
+    const payloads = [
+      `" /><desc id="xss-test">border-radius-injected</desc><rect rx="`,
+      `" /><script>document.documentElement.dataset.xss=1</script><rect rx="`,
+    ];
+
+    payloads.forEach((border_radius) => {
+      const svg = renderRepoCard(data_repo.repository, { border_radius });
+      document.body.innerHTML = svg;
+
+      expect(svg).not.toContain("border-radius-injected");
+      expect(svg).not.toContain("<script>");
+      expect(svg).not.toContain("document.documentElement.dataset.xss");
+      expect(queryByTestId(document.body, "card-bg")).toHaveAttribute(
+        "rx",
+        "4.5",
+      );
+      expect(document.querySelector("#xss-test")).toBeNull();
+      expect(document.querySelector("script")).toBeNull();
+    });
+  });
+
   it("should fallback to default description", () => {
     document.body.innerHTML = renderRepoCard({
       ...data_repo.repository,

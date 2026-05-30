@@ -2,6 +2,7 @@ import { describe, expect, it } from "@jest/globals";
 import {
   parseBoolean,
   parseArray,
+  parseBorderRadius,
   clampValue,
   lowercaseTrim,
   chunkArray,
@@ -34,6 +35,22 @@ describe("Test ops.js", () => {
     expect(parseArray("")).toEqual([]);
     // @ts-ignore
     expect(parseArray(undefined)).toEqual([]);
+  });
+
+  it("should test parseBorderRadius", () => {
+    expect(parseBorderRadius("10")).toBe(10);
+    expect(parseBorderRadius(10.5)).toBe(10.5);
+    expect(parseBorderRadius("-1")).toBe(0);
+    expect(parseBorderRadius("100")).toBe(50);
+    expect(parseBorderRadius("abc")).toBe(4.5);
+    expect(parseBorderRadius("Infinity")).toBe(4.5);
+    expect(
+      parseBorderRadius(
+        `" /><script>document.documentElement.dataset.xss=1</script><rect rx="`,
+      ),
+    ).toBe(4.5);
+    // @ts-ignore
+    expect(parseBorderRadius(undefined)).toBe(4.5);
   });
 
   it("should test clampValue", () => {

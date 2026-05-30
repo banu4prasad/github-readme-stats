@@ -36,6 +36,10 @@ const parseArray = (str) => {
   return str.split(",");
 };
 
+const DEFAULT_BORDER_RADIUS = 4.5;
+const MIN_BORDER_RADIUS = 0;
+const MAX_BORDER_RADIUS = 50;
+
 /**
  * Clamp the given number between the given range.
  *
@@ -50,6 +54,35 @@ const clampValue = (number, min, max) => {
     return min;
   }
   return Math.max(min, Math.min(number, max));
+};
+
+/**
+ * Parse and clamp the card border radius.
+ *
+ * @param {unknown} value The border radius value to parse.
+ * @returns {number} The parsed border radius.
+ */
+const parseBorderRadius = (value) => {
+  if (value === undefined || value === null) {
+    return DEFAULT_BORDER_RADIUS;
+  }
+
+  if (typeof value === "string" && value.trim() === "") {
+    return DEFAULT_BORDER_RADIUS;
+  }
+
+  const radius =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value.trim())
+        : NaN;
+
+  if (!Number.isFinite(radius)) {
+    return DEFAULT_BORDER_RADIUS;
+  }
+
+  return clampValue(radius, MIN_BORDER_RADIUS, MAX_BORDER_RADIUS);
 };
 
 /**
@@ -116,6 +149,7 @@ const dateDiff = (d1, d2) => {
 export {
   parseBoolean,
   parseArray,
+  parseBorderRadius,
   clampValue,
   lowercaseTrim,
   chunkArray,

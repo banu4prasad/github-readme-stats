@@ -12,7 +12,7 @@ import {
   MissingParamError,
   retrieveSecondaryMessage,
 } from "../src/common/error.js";
-import { parseBoolean } from "../src/common/ops.js";
+import { parseBoolean, parseBorderRadius } from "../src/common/ops.js";
 import { getQueryParams } from "../src/common/query.js";
 import { renderError } from "../src/common/render.js";
 import { fetchRepo } from "../src/fetchers/repo.js";
@@ -90,7 +90,7 @@ export default async (req, res) => {
         text_color,
         bg_color,
         theme,
-        border_radius,
+        border_radius: parseBorderRadius(border_radius),
         border_color,
         show_owner: parseBoolean(show_owner),
         locale: locale ? locale.toLowerCase() : null,

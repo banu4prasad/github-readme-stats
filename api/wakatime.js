@@ -15,7 +15,11 @@ import {
   MissingParamError,
   retrieveSecondaryMessage,
 } from "../src/common/error.js";
-import { parseArray, parseBoolean } from "../src/common/ops.js";
+import {
+  parseArray,
+  parseBoolean,
+  parseBorderRadius,
+} from "../src/common/ops.js";
 import { getQueryParams } from "../src/common/query.js";
 
 // @ts-ignore
@@ -104,7 +108,7 @@ export default async (req, res) => {
         bg_color,
         theme,
         hide_progress,
-        border_radius,
+        border_radius: parseBorderRadius(border_radius),
         border_color,
         locale: locale ? locale.toLowerCase() : null,
         layout,

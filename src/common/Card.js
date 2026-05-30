@@ -1,6 +1,7 @@
 // @ts-check
 
 import { encodeHTML } from "./html.js";
+import { parseBorderRadius } from "./ops.js";
 import { flexLayout } from "./render.js";
 
 class Card {
@@ -10,7 +11,7 @@ class Card {
    * @param {object} args Card arguments.
    * @param {number=} args.width Card width.
    * @param {number=} args.height Card height.
-   * @param {number=} args.border_radius Card border radius.
+   * @param {number|string=} args.border_radius Card border radius.
    * @param {string=} args.customTitle Card custom title.
    * @param {string=} args.defaultTitle Card default title.
    * @param {string=} args.titlePrefixIcon Card title prefix icon.
@@ -36,7 +37,7 @@ class Card {
     this.hideBorder = false;
     this.hideTitle = false;
 
-    this.border_radius = border_radius;
+    this.border_radius = parseBorderRadius(border_radius);
 
     // returns theme based colors with proper overrides and defaults
     this.colors = colors;

@@ -94,6 +94,29 @@ describe("Card", () => {
     );
   });
 
+  it("should sanitize border radius", () => {
+    const payloads = [
+      `" /><desc id="xss-test">border-radius-injected</desc><rect rx="`,
+      `" /><script>document.documentElement.dataset.xss=1</script><rect rx="`,
+    ];
+
+    payloads.forEach((border_radius) => {
+      const card = new Card({ border_radius });
+      const svg = card.render(``);
+      document.body.innerHTML = svg;
+
+      expect(svg).not.toContain("border-radius-injected");
+      expect(svg).not.toContain("<script>");
+      expect(svg).not.toContain("document.documentElement.dataset.xss");
+      expect(queryByTestId(document.body, "card-bg")).toHaveAttribute(
+        "rx",
+        "4.5",
+      );
+      expect(document.querySelector("#xss-test")).toBeNull();
+      expect(document.querySelector("script")).toBeNull();
+    });
+  });
+
   it("should have less height after title is hidden", () => {
     const card = new Card({ height: 200, title: "ok" });
     card.setHideTitle(true);
