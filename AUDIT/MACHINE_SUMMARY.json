@@ -1,0 +1,26 @@
+{
+  "target": "https://github.com/anuraghazra/github-readme-stats",
+  "type": "repo",
+  "date": "2026-05-30",
+  "git_sha": "12848e5964ae987286c91a30f8a28c03952b5d51",
+  "live_url": "https://github-readme-stats.vercel.app/",
+  "run_commands": [
+    "npm run test",
+    "npm audit",
+    "npm run bench"
+  ],
+  "build_status": "success",
+  "health_checks": "N/A (Serverless functions)",
+  "top_3_issues": [
+    "High severity NPM dependency vulnerabilities (Axios SSRF/Prototype pollution)",
+    "Missing Node.js 24 compatibility (using v22 instead of recommended v24)",
+    "ReDoS vulnerabilities in minimatch/picomatch dependencies"
+  ],
+  "test_status": "passing (378 tests, 32 suites, 100% pass rate)",
+  "coverage": "High (> 80% on most active code paths)",
+  "observability": "Basic (Console logging based on NODE_ENV)",
+  "secrets_needed": [
+    "GitHub PAT (Personal Access Token) for API fetching"
+  ],
+  "confidence_overall": "HIGH"
+}

@@ -1,0 +1,11 @@
+# Patch Instruction
+
+Because fixing npm vulnerabilities modifies `package-lock.json` and potentially `package.json`, which can be large and environment-dependent, a standard `.diff` file is not the best way to apply this patch.
+
+Instead, maintainers should run the following command directly in the repository root:
+
+```bash
+npm audit fix
+```
+
+This will automatically update the dependencies and regenerate the `package-lock.json` file securely.
