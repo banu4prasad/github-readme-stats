@@ -106,8 +106,8 @@ const fetchTopLanguages = async (
 
   // filter out repositories to be hidden
   repoNodes = repoNodes
-    .sort((a, b) => b.size - a.size)
-    .filter((name) => !repoToHide[name.name]);
+    .filter((name) => !repoToHide[name.name])
+    .sort((a, b) => b.size - a.size);
 
   let repoCount = 0;
 

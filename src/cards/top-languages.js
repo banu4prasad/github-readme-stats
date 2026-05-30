@@ -186,11 +186,11 @@ const trimTopLanguages = (topLangs, langs_count, hide) => {
 
   // filter out languages to be hidden
   langs = langs
-    .sort((a, b) => b.size - a.size)
     .filter((lang) => {
       // @ts-ignore
       return !langsToHide[lowercaseTrim(lang.name)];
     })
+    .sort((a, b) => b.size - a.size)
     .slice(0, langsCount);
 
   const totalLanguageSize = langs.reduce((acc, curr) => acc + curr.size, 0);
