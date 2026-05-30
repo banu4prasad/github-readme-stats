@@ -2,6 +2,7 @@
 
 import { Card } from "../common/Card.js";
 import { getCardColors } from "../common/color.js";
+import { encodeHTML } from "../common/html.js";
 import { I18n } from "../common/I18n.js";
 import { clampValue, lowercaseTrim } from "../common/ops.js";
 import { createProgressNode, flexLayout } from "../common/render.js";
@@ -37,7 +38,7 @@ const TOTAL_TEXT_WIDTH = 275;
  */
 const noCodingActivityNode = ({ color, text }) => {
   return `
-    <text x="25" y="11" class="stat bold" fill="${color}">${text}</text>
+    <text x="25" y="11" class="stat bold" fill="${color}">${encodeHTML(text, { encodeAll: true })}</text>
   `;
 };
 
@@ -78,7 +79,7 @@ const createCompactLangNode = ({ lang, x, y, display_format }) => {
     <g transform="translate(${x}, ${y})">
       <circle cx="5" cy="6" r="5" fill="${color}" />
       <text data-testid="lang-name" x="15" y="10" class='lang-name'>
-        ${lang.name} - ${value}
+        ${encodeHTML(lang.name, { encodeAll: true })} - ${encodeHTML(value, { encodeAll: true })}
       </text>
     </g>
   `;
@@ -110,6 +111,15 @@ const createLanguageTextNode = ({ langs, y, display_format, card_width }) => {
     });
   });
 };
+
+/**
+ * Encode a value for a double-quoted SVG attribute.
+ *
+ * @param {string | number} value The attribute value.
+ * @returns {string} The encoded attribute value.
+ */
+const encodeAttribute = (value) =>
+  encodeHTML(String(value), { encodeAll: true }).replace(/"/g, "&quot;");
 
 /**
  * Create WakaTime text item.
@@ -154,12 +164,12 @@ const createTextNode = ({
 
   return `
     <g class="stagger" style="animation-delay: ${staggerDelay}ms" transform="translate(25, 0)">
-      <text class="stat bold" y="12.5" data-testid="${id}">${label}:</text>
+      <text class="stat bold" y="12.5" data-testid="${encodeAttribute(id)}">${encodeHTML(label, { encodeAll: true })}:</text>
       <text
         class="stat"
         x="${hideProgress ? HIDDEN_PROGRESSBAR_PADDING : PROGRESSBAR_PADDING + progressBarWidth}"
         y="12.5"
-      >${value}</text>
+      >${encodeHTML(value, { encodeAll: true })}</text>
       ${cardProgress}
     </g>
   `;

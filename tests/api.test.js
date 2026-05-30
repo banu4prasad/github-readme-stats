@@ -211,10 +211,12 @@ const faker = (query, data) => {
 
 beforeEach(() => {
   process.env.CACHE_SECONDS = undefined;
+  delete process.env.ALL_TIME_CONTRIBS;
 });
 
 afterEach(() => {
   mock.reset();
+  delete process.env.ALL_TIME_CONTRIBS;
 });
 
 describe("Test /api/", () => {
@@ -538,7 +540,7 @@ describe("Test /api/", () => {
     );
   });
 
-  it("should pass all_time_contribs parameter to renderStatsCard", async () => {
+  it("should ignore all_time_contribs unless the feature flag is enabled", async () => {
     const { req, res } = faker(
       {
         username: "anuraghazra",
@@ -550,15 +552,69 @@ describe("Test /api/", () => {
     await api(req, res);
 
     expect(res.setHeader).toHaveBeenCalledWith("Content-Type", "image/svg+xml");
+    expect(mock.history.post).toHaveLength(1);
     expect(res.send).toHaveBeenCalledWith(
       renderStatsCard(stats, {
         ...req.query,
-        all_time_contribs: true,
+        all_time_contribs: false,
       }),
     );
   });
 
+  it("should ignore all_time_contribs from request URLs unless the feature flag is enabled", async () => {
+    const req = {
+      url: "/api?username=anuraghazra&all_time_contribs=true&number_format=long",
+    };
+    const res = {
+      setHeader: jest.fn(),
+      send: jest.fn(),
+    };
+    mock.onPost("https://api.github.com/graphql").replyOnce(200, data_stats);
+
+    await api(req, res);
+
+    const renderedCard = res.send.mock.calls[0][0];
+    expect(mock.history.post).toHaveLength(1);
+    expect(extractStatValue(renderedCard, "contribs")).toBe(
+      String(stats.contributedTo),
+    );
+  });
+
+  it("should pass all_time_contribs to renderStatsCard when the feature flag is enabled", async () => {
+    process.env.ALL_TIME_CONTRIBS = "true";
+    const metrics = mockAllTimeApiResponses({ yearCount: 2 });
+    const { req, res } = createApiRequest({
+      all_time_contribs: "true",
+      number_format: "long",
+    });
+
+    await api(req, res);
+
+    const renderedCard = res.send.mock.calls[0][0];
+    expect(metrics.getGraphQLCalls()).toBe(4);
+    expect(metrics.getContributionYearsCalls()).toBe(1);
+    expect(metrics.getYearlyContributionCalls()).toBe(2);
+    expect(extractStatValue(renderedCard, "contribs")).toBe("2");
+  });
+
   it("should use ALL_TIME_STATS_CARD cache TTL when all_time_contribs is enabled", async () => {
+    process.env.ALL_TIME_CONTRIBS = "true";
+    mockAllTimeApiResponses({ yearCount: 1 });
+    const { req, res } = createApiRequest({
+      all_time_contribs: "true",
+    });
+
+    await api(req, res);
+
+    expect(res.setHeader).toHaveBeenCalledWith(
+      "Cache-Control",
+      expect.stringContaining(
+        `max-age=${CACHE_TTL.ALL_TIME_STATS_CARD.DEFAULT}`,
+      ),
+    );
+  });
+
+  it("should use STATS_CARD cache TTL when all_time_contribs is disabled by feature flag", async () => {
     const { req, res } = faker(
       {
         username: "anuraghazra",
@@ -569,27 +625,6 @@ describe("Test /api/", () => {
 
     await api(req, res);
 
-    // Should use ALL_TIME_STATS_CARD cache settings (longer cache)
-    expect(res.setHeader).toHaveBeenCalledWith(
-      "Cache-Control",
-      expect.stringContaining(
-        `max-age=${CACHE_TTL.ALL_TIME_STATS_CARD.DEFAULT}`,
-      ),
-    );
-  });
-
-  it("should use STATS_CARD cache TTL when all_time_contribs is disabled", async () => {
-    const { req, res } = faker(
-      {
-        username: "anuraghazra",
-        all_time_contribs: "false",
-      },
-      data_stats,
-    );
-
-    await api(req, res);
-
-    // Should use standard STATS_CARD cache settings
     expect(res.setHeader).toHaveBeenCalledWith(
       "Cache-Control",
       expect.stringContaining(`max-age=${CACHE_TTL.STATS_CARD.DEFAULT}`),

@@ -132,8 +132,11 @@ describe("WakaTime fetcher", () => {
   });
 
   it.each([
+    "",
+    " ",
     "attacker.ngrok-free.app",
     "localhost",
+    "0.0.0.0",
     "127.0.0.1",
     "10.0.0.1",
     "172.16.0.1",
@@ -141,10 +144,13 @@ describe("WakaTime fetcher", () => {
     "169.254.169.254",
     "[::1]",
     "https://wakatime.com",
+    "http://wakatime.com",
     "wakatime.com/api",
     "wakatime.com:443",
     "user@wakatime.com",
     "wakatime.com.",
+    ".wakatime.com",
+    "wakatime.com ",
     "waka_time.com",
   ])("should reject unsafe api_domain %s", async (api_domain) => {
     await expect(

@@ -983,7 +983,7 @@ GitHub Readme Stats provides several environment variables that can be used to c
     </tr>
     <tr>
       <td><code>ALL_TIME_CONTRIBS</code></td>
-      <td>Enables or disables the all-time contributions feature globally. When set to <code>false</code>, the <code>all_time_contribs</code> query parameter will be ignored and fallback to last year's count. Defaults to enabled.</td>
+      <td>Enables the all-time contributions feature globally. This feature is disabled by default; unless set to <code>true</code>, the <code>all_time_contribs</code> query parameter will be ignored and fallback to last year's count.</td>
       <td><code>true</code> or <code>false</code></td>
     </tr>
     <tr>

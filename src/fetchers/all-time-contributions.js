@@ -245,7 +245,7 @@ export const fetchAllTimeContributions = async (login, options = {}) => {
     };
   }
 
-  // Count unique repositories across ALL years
+  // Count unique repositories across all contribution years.
   const allRepos = new Set();
 
   // Fetch years in batches to avoid rate limiting

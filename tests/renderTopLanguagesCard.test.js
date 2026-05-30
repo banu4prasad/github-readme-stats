@@ -41,6 +41,8 @@ const langs = {
   },
 };
 
+const xssLabelPayload = `"></text><desc id="xss-label-test">label-injected</desc><text x="0" y="0">`;
+
 /**
  * Retrieve number array from SVG path definition string.
  *
@@ -380,6 +382,71 @@ describe("Test renderTopLanguages", () => {
     expect(queryAllByTestId(document.body, "lang-progress")[2]).toHaveAttribute(
       "width",
       "20%",
+    );
+  });
+
+  it("should encode injected language names in normal layout", () => {
+    const card = renderTopLanguages({
+      injected: {
+        color: "#0f0",
+        name: xssLabelPayload,
+        size: 100,
+      },
+    });
+
+    expect(card).not.toContain('<desc id="xss-label-test">');
+    expect(card).not.toContain("xss-label-test");
+    expect(card).not.toContain("label-injected");
+
+    document.body.innerHTML = card;
+    expect(document.getElementById("xss-label-test")).toBeNull();
+    expect(queryByTestId(document.body, "lang-name")).toHaveTextContent(
+      xssLabelPayload,
+    );
+  });
+
+  it("should encode injected language names in compact layout", () => {
+    const card = renderTopLanguages(
+      {
+        injected: {
+          color: "#0f0",
+          name: xssLabelPayload,
+          size: 100,
+        },
+      },
+      { layout: "compact" },
+    );
+
+    expect(card).not.toContain('<desc id="xss-label-test">');
+    expect(card).not.toContain("xss-label-test");
+    expect(card).not.toContain("label-injected");
+
+    document.body.innerHTML = card;
+    expect(document.getElementById("xss-label-test")).toBeNull();
+    expect(queryByTestId(document.body, "lang-name")).toHaveTextContent(
+      `${xssLabelPayload} 100.00%`,
+    );
+  });
+
+  it("should render normal language names in normal and compact layouts", () => {
+    const normalLangs = {
+      cpp: {
+        color: "#0f0",
+        name: "C++ & HTML",
+        size: 100,
+      },
+    };
+
+    document.body.innerHTML = renderTopLanguages(normalLangs);
+    expect(queryByTestId(document.body, "lang-name")).toHaveTextContent(
+      "C++ & HTML",
+    );
+
+    document.body.innerHTML = renderTopLanguages(normalLangs, {
+      layout: "compact",
+    });
+    expect(queryByTestId(document.body, "lang-name")).toHaveTextContent(
+      "C++ & HTML 100.00%",
     );
   });
 

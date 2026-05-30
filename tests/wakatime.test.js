@@ -144,19 +144,72 @@ describe("Test /api/wakatime", () => {
     );
   });
 
-  it("should reject attacker-controlled api_domain without requesting it", async () => {
+  it.each([
+    "",
+    "attacker.ngrok-free.app",
+    "https://wakatime.com",
+    "wakatime.com/api",
+    "wakatime.com:443",
+    "user@wakatime.com",
+    "127.0.0.1",
+    "10.0.0.1",
+    "localhost",
+  ])(
+    "should reject unsafe api_domain %s without requesting it",
+    async (api_domain) => {
+      const req = {
+        query: {
+          username: "testuser",
+          api_domain,
+        },
+      };
+      const res = { setHeader: jest.fn(), send: jest.fn() };
+
+      await wakatime(req, res);
+
+      expect(mock.history.get).toHaveLength(0);
+      expect(res.setHeader).toHaveBeenCalledWith(
+        "Content-Type",
+        "image/svg+xml",
+      );
+      expect(res.send.mock.calls[0][0]).toContain(
+        "Invalid WakaTime API domain",
+      );
+    },
+  );
+
+  it("should reject unsafe api_domain from the request URL without requesting it", async () => {
     const req = {
-      query: {
-        username: "testuser",
-        api_domain: "attacker.ngrok-free.app",
-      },
+      url: "/api/wakatime?username=testuser&api_domain=attacker.ngrok-free.app",
     };
     const res = { setHeader: jest.fn(), send: jest.fn() };
 
     await wakatime(req, res);
 
     expect(mock.history.get).toHaveLength(0);
-    expect(res.setHeader).toHaveBeenCalledWith("Content-Type", "image/svg+xml");
     expect(res.send.mock.calls[0][0]).toContain("Invalid WakaTime API domain");
+  });
+
+  it("should allow explicit wakatime.com api_domain", async () => {
+    const username = "anuraghazra";
+    const req = {
+      query: {
+        username,
+        api_domain: "wakatime.com",
+      },
+    };
+    const res = { setHeader: jest.fn(), send: jest.fn() };
+    mock
+      .onGet(
+        `https://wakatime.com/api/v1/users/${username}/stats?is_including_today=true`,
+      )
+      .reply(200, wakaTimeData);
+
+    await wakatime(req, res);
+
+    expect(mock.history.get).toHaveLength(1);
+    expect(res.send).toHaveBeenCalledWith(
+      renderWakatimeCard(wakaTimeData.data, {}),
+    );
   });
 });

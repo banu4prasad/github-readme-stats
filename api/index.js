@@ -19,6 +19,7 @@ import {
 } from "../src/common/ops.js";
 import { getQueryParams } from "../src/common/query.js";
 import { renderError } from "../src/common/render.js";
+import { isAllTimeContribsEnabled } from "../src/common/envs.js";
 import { fetchStats } from "../src/fetchers/stats.js";
 import { isLocaleAvailable } from "../src/translations.js";
 
@@ -93,10 +94,12 @@ export default async (req, res) => {
 
   try {
     const showStats = parseArray(show);
+    const allTimeContribsEnabled =
+      parseBoolean(all_time_contribs) && isAllTimeContribsEnabled();
     const stats = await fetchStats(
       username,
       parseBoolean(include_all_commits),
-      parseBoolean(all_time_contribs),
+      allTimeContribsEnabled,
       parseArray(exclude_repo),
       showStats.includes("prs_merged") ||
         showStats.includes("prs_merged_percentage"),
@@ -106,7 +109,7 @@ export default async (req, res) => {
     );
 
     // Use appropriate cache TTL config based on whether all-time contribs is enabled
-    const cacheTTL = parseBoolean(all_time_contribs)
+    const cacheTTL = allTimeContribsEnabled
       ? CACHE_TTL.ALL_TIME_STATS_CARD
       : CACHE_TTL.STATS_CARD;
 
@@ -129,7 +132,7 @@ export default async (req, res) => {
       card_width: parseInt(card_width, 10),
       hide_rank: parseBoolean(hide_rank),
       include_all_commits: parseBoolean(include_all_commits),
-      all_time_contribs: parseBoolean(all_time_contribs),
+      all_time_contribs: allTimeContribsEnabled,
       commits_year: commits_year ? parseInt(commits_year, 10) : undefined,
       line_height,
       title_color,

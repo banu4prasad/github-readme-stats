@@ -14,7 +14,7 @@ const DOMAIN_LABEL_REGEX = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
  * @returns {string} Safe API domain.
  */
 const getWakatimeApiDomain = (api_domain) => {
-  if (api_domain === undefined || api_domain === null || api_domain === "") {
+  if (api_domain === undefined || api_domain === null) {
     return DEFAULT_WAKATIME_API_DOMAIN;
   }
 

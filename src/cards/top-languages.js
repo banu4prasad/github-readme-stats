@@ -3,6 +3,7 @@
 import { Card } from "../common/Card.js";
 import { getCardColors } from "../common/color.js";
 import { formatBytes } from "../common/fmt.js";
+import { encodeHTML } from "../common/html.js";
 import { I18n } from "../common/I18n.js";
 import { chunkArray, clampValue, lowercaseTrim } from "../common/ops.js";
 import {
@@ -242,8 +243,8 @@ const createProgressTextNode = ({
 
   return `
     <g class="stagger" style="animation-delay: ${staggerDelay}ms">
-      <text data-testid="lang-name" x="2" y="15" class="lang-name">${name}</text>
-      <text x="${progressTextX}" y="34" class="lang-name">${displayValue}</text>
+      <text data-testid="lang-name" x="2" y="15" class="lang-name">${encodeHTML(name, { encodeAll: true })}</text>
+      <text x="${progressTextX}" y="34" class="lang-name">${encodeHTML(displayValue, { encodeAll: true })}</text>
       ${createProgressNode({
         x: 0,
         y: 25,
@@ -285,7 +286,7 @@ const createCompactLangNode = ({
     <g class="stagger" style="animation-delay: ${staggerDelay}ms">
       <circle cx="5" cy="6" r="5" fill="${color}" />
       <text data-testid="lang-name" x="15" y="10" class='lang-name'>
-        ${lang.name} ${hideProgress ? "" : displayValue}
+        ${encodeHTML(lang.name, { encodeAll: true })} ${hideProgress ? "" : encodeHTML(displayValue, { encodeAll: true })}
       </text>
     </g>
   `;
@@ -742,7 +743,7 @@ const noLanguagesDataNode = ({ color, text, layout }) => {
   return `
     <text x="${
       layout === "pie" || layout === "donut-vertical" ? CARD_PADDING : 0
-    }" y="11" class="stat bold" fill="${color}">${text}</text>
+    }" y="11" class="stat bold" fill="${color}">${encodeHTML(text, { encodeAll: true })}</text>
   `;
 };
 

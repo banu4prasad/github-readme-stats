@@ -622,7 +622,7 @@ describe("Test fetchStats with all_time_contribs", () => {
   };
 
   beforeEach(() => {
-    // Enable ALL_TIME_CONTRIBS feature by default for these tests
+    // Enable ALL_TIME_CONTRIBS for tests that exercise the all-time path.
     process.env.ALL_TIME_CONTRIBS = "true";
   });
 
@@ -707,6 +707,30 @@ describe("Test fetchStats with all_time_contribs", () => {
 
     // Should fallback to last year's count since env is disabled
     expect(stats.contributedTo).toBe(61);
+  });
+
+  it("should fallback to last year's count when ALL_TIME_CONTRIBS env is unset", async () => {
+    delete process.env.ALL_TIME_CONTRIBS;
+    let graphQLCalls = 0;
+
+    mock.reset();
+    mock.onPost("https://api.github.com/graphql").reply((cfg) => {
+      graphQLCalls += 1;
+      const req = JSON.parse(cfg.data);
+      if (req.query.includes("totalCommitContributions")) {
+        return [200, data_stats];
+      }
+      return [200, data_repo];
+    });
+
+    const stats = await fetchStats(
+      "anuraghazra",
+      false, // include_all_commits
+      true, // all_time_contribs requested but feature not enabled
+    );
+
+    expect(stats.contributedTo).toBe(61);
+    expect(graphQLCalls).toBe(1);
   });
 
   it("should fallback gracefully when all-time contributions fetch fails", async () => {

@@ -394,8 +394,8 @@ const fetchStats = async (
       user.repositoryDiscussionComments.totalCount;
   }
 
-  // Handle all-time contributions if enabled (always deduplicated)
-  // Feature requires ALL_TIME_CONTRIBS env var to not be "false" (defaults to enabled)
+  // Handle all-time contributions if enabled (always deduplicated).
+  // Feature requires ALL_TIME_CONTRIBS=true.
   if (all_time_contribs && isAllTimeContribsEnabled()) {
     let timeoutId = null;
     let didTimeout = false;

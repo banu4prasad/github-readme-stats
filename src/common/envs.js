@@ -15,12 +15,10 @@ const parseIntegerEnv = (key, fallback) => {
 
 /**
  * Whether the all-time contributions feature is enabled.
- * Defaults to true if not explicitly set to "false".
- * Set ALL_TIME_CONTRIBS=false to disable the feature entirely.
+ * Requires ALL_TIME_CONTRIBS=true to enable the feature.
  * @returns {boolean} True when all-time contributions are enabled.
  */
-const isAllTimeContribsEnabled = () =>
-  process.env.ALL_TIME_CONTRIBS !== "false";
+const isAllTimeContribsEnabled = () => process.env.ALL_TIME_CONTRIBS === "true";
 
 /**
  * Timeout for all-time contributions fetch in milliseconds.
